@@ -1,0 +1,11 @@
+-target:library
+-nologo
+-optimize+
+-out:"vrcstubs\VRC.Dynamics.dll"
+-reference:"C:\Program Files\VNyan\VNyan_Data\Managed\mscorlib.dll"
+-reference:"C:\Program Files\VNyan\VNyan_Data\Managed\netstandard.dll"
+-reference:"C:\Program Files\VNyan\VNyan_Data\Managed\System.dll"
+-reference:"C:\Program Files\VNyan\VNyan_Data\Managed\System.Core.dll"
+-reference:"C:\Program Files\VNyan\VNyan_Data\Managed\UnityEngine.CoreModule.dll"
+"vrcstubs\VRCDynamicsStubs.cs"
+"vrcstubs\AssemblyInfo.cs"
