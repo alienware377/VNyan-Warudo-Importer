@@ -1,0 +1,16 @@
+# Unity project noise from the .vnobj build project
+_unitybuild/Library/
+_unitybuild/Temp/
+_unitybuild/Logs/
+_unitybuild/obj/
+_unitybuild/UserSettings/
+_unitybuild/build.log
+_unitybuild/AssetBundles/
+_unitybuild/Assets/Plugins/WarudoImporter.dll*
+*.csproj
+*.sln
+
+# Intermediate compiler output; the shipped copies live in dist/
+build/*.dll
+build/*.pdb
+vrcstubs/*.pdb
