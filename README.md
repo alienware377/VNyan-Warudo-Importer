@@ -88,6 +88,32 @@ Poiyomi and other shaders travel compiled inside the bundle and are used as-is. 
 never swapped in, and no material is replaced with a stand-in. What the mod author shipped
 is what renders.
 
+### Expressions and Perfect Sync (ARKit)
+
+Two separate things happen here, and both matter.
+
+**VRM expressions.** Mouth shapes and emotions are mapped onto the standard VRM clips —
+`A/I/U/E/O`, `Blink` (plus `Blink_L`/`Blink_R`), `Joy`, `Angry`, `Sorrow`, `Fun` and the four
+look directions. The mapper recognises VRoid's `Fcl_*` names, VRChat viseme spellings
+(`vrc.v_aa`), Japanese kana (`あいうえお`), and `_L`/`Left` suffix variants, so most models
+land on the right clips without any manual work.
+
+**Perfect Sync.** If the model carries the 52 ARKit shapes, the importer creates a blendshape
+clip for each one so face tracking can actually reach them. This is not optional and it is
+easy to get wrong: VNyan applies tracking through the VRM blendshape proxy, looking clips up
+**by name** — it never reads mesh blendshapes directly. A model can ship all 52 ARKit shapes
+and still sit completely frozen until each one also exists as a clip.
+
+Each shape is registered under both its authored spelling and a lower-case one
+(`jawOpen` and `jawopen`), because the name comparison is case-sensitive and hosts differ on
+whether they lower-case incoming tracking names. Both clips share a single binding, and only
+the name the host actually asks for is ever applied, so nothing is driven twice.
+
+The status log tells you what happened — for example
+`Perfect Sync: 104 ARKit clips created`. If a model has no ARKit shapes authored into it,
+that line is absent and only the VRM expressions above are available; nothing the importer
+does can invent shapes the model doesn't have.
+
 ---
 
 ## Physics

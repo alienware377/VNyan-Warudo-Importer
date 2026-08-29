@@ -63,6 +63,12 @@ namespace WarudoImporter
         public string presetName;
         public List<ShapeRef> shapes;
         public bool isBinary;
+
+        /// <summary>
+        /// Set for clips that are NOT one of the VRM presets - Perfect Sync / ARKit shapes get a
+        /// clip named after the shape itself, with preset Unknown. Null for preset clips.
+        /// </summary>
+        public string customName;
     }
 
     /// <summary>
@@ -280,6 +286,85 @@ namespace WarudoImporter
             "mouthStretchLeft", "mouthStretchRight", "mouthUpperUpLeft", "mouthUpperUpRight",
             "noseSneerLeft", "noseSneerRight", "tongueOut"
         };
+
+        /// <summary>
+        /// Plans one clip per ARKit shape actually present on the avatar.
+        ///
+        /// This is what makes Perfect Sync work, and it is NOT optional: the host applies
+        /// tracking through VRMBlendShapeProxy.AccumulateValue with a key built by
+        /// BlendShapeKey.CreateUnknown(name), which resolves a CLIP by name - it never looks at
+        /// mesh blendshapes. A model can carry all 52 ARKit shapes on its mesh and still be
+        /// completely unreadable to the host until each one also exists as a clip.
+        ///
+        /// Two clips are emitted per shape when the authored name is not already lower case: one
+        /// under the exact mesh name and one lower-cased. BlendShapeKey compares
+        /// "Unknown_" + Name as a case-SENSITIVE string, and hosts differ in whether they
+        /// lower-case incoming tracking names, so covering both spellings is what makes this
+        /// robust. The two clips share the same binding, and only whichever one the host asks
+        /// for is ever accumulated, so nothing is double-applied.
+        /// </summary>
+        public static List<ClipPlan> PlanArKit(GameObject avatarRoot)
+        {
+            List<ClipPlan> plans = new List<ClipPlan>();
+            if (avatarRoot == null) return plans;
+
+            // Canonical spelling per normalized name, so "eyeBlink_L" still yields a clip named
+            // the way ARKit spells it as well as the mesh's own spelling.
+            Dictionary<string, string> canonical = new Dictionary<string, string>();
+            for (int i = 0; i < ArKit52.Length; i++) canonical[Normalize(ArKit52[i])] = ArKit52[i];
+
+            HashSet<string> emitted = new HashSet<string>(StringComparer.Ordinal);
+            SkinnedMeshRenderer[] smrs = avatarRoot.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            for (int r = 0; r < smrs.Length; r++)
+            {
+                SkinnedMeshRenderer smr = smrs[r];
+                if (smr == null || smr.sharedMesh == null) continue;
+                for (int i = 0; i < smr.sharedMesh.blendShapeCount; i++)
+                {
+                    string raw = smr.sharedMesh.GetBlendShapeName(i);
+                    string bare = raw;
+                    int dot = bare.LastIndexOf('.');
+                    if (dot >= 0) bare = bare.Substring(dot + 1);   // strip the "Mesh." qualifier
+
+                    string norm = Normalize(bare);
+                    if (!canonical.ContainsKey(norm)) continue;      // not an ARKit shape
+
+                    // Names to expose this shape under: the mesh's own spelling, the canonical
+                    // ARKit spelling, and the lower-cased form of each.
+                    List<string> names = new List<string>();
+                    AddName(names, bare);
+                    AddName(names, canonical[norm]);
+                    AddName(names, bare.ToLowerInvariant());
+                    AddName(names, canonical[norm].ToLowerInvariant());
+
+                    for (int n = 0; n < names.Count; n++)
+                    {
+                        if (!emitted.Add(names[n])) continue;        // first mesh wins a given name
+                        ClipPlan p = new ClipPlan();
+                        p.preset = VrmPreset.Unknown;
+                        p.presetName = null;
+                        p.customName = names[n];
+                        p.isBinary = false;
+                        p.shapes = new List<ShapeRef>();
+                        ShapeRef s = new ShapeRef();
+                        s.renderer = smr;
+                        s.index = i;
+                        s.name = raw;
+                        s.weight = 100f;
+                        p.shapes.Add(s);
+                        plans.Add(p);
+                    }
+                }
+            }
+            return plans;
+        }
+
+        private static void AddName(List<string> list, string n)
+        {
+            if (string.IsNullOrEmpty(n)) return;
+            for (int i = 0; i < list.Count; i++) if (string.Equals(list[i], n, StringComparison.Ordinal)) return;
+            list.Add(n);
+        }
 
         /// <summary>The 52 canonical ARKit blendshape names.</summary>
         public static List<string> ArKitNames
