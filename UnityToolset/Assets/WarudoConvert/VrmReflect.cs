@@ -182,10 +182,15 @@ namespace WarudoImporter
             clips.Clear();
 
             Dictionary<string, ClipPlan> byPreset = new Dictionary<string, ClipPlan>(StringComparer.OrdinalIgnoreCase);
+            List<ClipPlan> custom = new List<ClipPlan>();
             if (plans != null)
                 foreach (ClipPlan p in plans)
-                    if (p != null && !string.IsNullOrEmpty(p.presetName) && !byPreset.ContainsKey(p.presetName))
+                {
+                    if (p == null) continue;
+                    if (!string.IsNullOrEmpty(p.customName)) { custom.Add(p); continue; }
+                    if (!string.IsNullOrEmpty(p.presetName) && !byPreset.ContainsKey(p.presetName))
                         byPreset[p.presetName] = p;
+                }
 
             string[] presetOrder = Enum.GetNames(tPreset);
             for (int i = 0; i < presetOrder.Length; i++)
@@ -227,6 +232,40 @@ namespace WarudoImporter
                 }
                 SetField(clip, "Values", bindings);
                 clips.Add(clip);
+            }
+
+            // Perfect Sync / ARKit clips. These carry preset Unknown and are found by NAME, which
+            // is the only way the host can reach them - it builds its lookup key with
+            // BlendShapeKey.CreateUnknown(name) and never inspects mesh blendshapes.
+            for (int c = 0; c < custom.Count; c++)
+            {
+                ClipPlan plan = custom[c];
+                if (plan.shapes == null || plan.shapes.Count == 0) continue;
+
+                List<object> made = new List<object>();
+                foreach (ShapeRef s in plan.shapes)
+                {
+                    if (s == null || s.renderer == null) continue;
+                    string rel = RelativePath(root.transform, s.renderer.transform);
+                    if (rel == null) continue;
+                    object b = Activator.CreateInstance(tBinding);
+                    SetField(b, "RelativePath", rel);
+                    SetField(b, "Index", s.index);
+                    SetField(b, "Weight", s.weight <= 0f ? 100f : s.weight);
+                    made.Add(b);
+                }
+                if (made.Count == 0) continue;
+
+                ScriptableObject clip = ScriptableObject.CreateInstance(tClip);
+                clip.name = plan.customName;
+                SetField(clip, "BlendShapeName", plan.customName);
+                SetField(clip, "Preset", PresetValue("Unknown"));
+                SetField(clip, "IsBinary", false);
+                Array arr = Array.CreateInstance(tBinding, made.Count);
+                for (int k = 0; k < made.Count; k++) arr.SetValue(made[k], k);
+                SetField(clip, "Values", arr);
+                clips.Add(clip);
+                boundShapes += made.Count;
             }
 
             Component proxy = AddOrGet(root, tProxy);

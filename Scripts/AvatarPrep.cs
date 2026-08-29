@@ -39,6 +39,7 @@ namespace WarudoImporter
             public List<ClipPlan> clipPlans;
             public int boundBlendShapes;
             public bool perfectSync;
+            public int arKitClips;
             public List<string> notes = new List<string>();
             public List<string> errors = new List<string>();
             public bool Ok { get { return errors.Count == 0; } }
@@ -54,7 +55,11 @@ namespace WarudoImporter
                                   (boneMap.missingRequired.Count > 0
                                       ? ", MISSING " + string.Join(", ", Names(boneMap.missingRequired))
                                       : ""));
-                sb.AppendLine("Expression clips bound: " + boundBlendShapes + (perfectSync ? " (perfect sync detected)" : ""));
+                sb.AppendLine("Expression clips bound: " + boundBlendShapes);
+                if (arKitClips > 0)
+                    sb.AppendLine("Perfect Sync: " + arKitClips + " ARKit clips created (face tracking will drive them).");
+                else if (perfectSync)
+                    sb.AppendLine("Perfect Sync shapes detected but NO clips were created - face tracking will not reach them.");
                 for (int i = 0; i < notes.Count; i++) sb.AppendLine("- " + notes[i]);
                 for (int i = 0; i < errors.Count; i++) sb.AppendLine("! " + errors[i]);
                 return sb.ToString();
@@ -106,6 +111,17 @@ namespace WarudoImporter
 
             r.perfectSync = BlendShapeMapper.IsPerfectSync(root);
             r.clipPlans = BlendShapeMapper.Plan(root);
+
+            // Perfect Sync needs a CLIP per ARKit shape, not just the shape on the mesh: the host
+            // resolves tracking names through the blendshape proxy by clip name. Without these the
+            // model has all 52 shapes and still cannot be driven by face tracking.
+            List<ClipPlan> arkit = BlendShapeMapper.PlanArKit(root);
+            if (arkit.Count > 0)
+            {
+                r.clipPlans.AddRange(arkit);
+                r.arKitClips = arkit.Count;
+            }
+
             int bound;
             Component proxy = VrmReflect.AddBlendShapeProxy(root, r.clipPlans, out bound);
             r.boundBlendShapes = bound;
