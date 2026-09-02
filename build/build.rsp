@@ -21,6 +21,7 @@
 "Scripts\Serialized\CommonStrings.cs"
 "Scripts\Serialized\EndianReader.cs"
 "Scripts\Serialized\Lz4Block.cs"
+"Scripts\Serialized\LzmaBlock.cs"
 "Scripts\Serialized\TypeTree.cs"
 "Scripts\Serialized\SerializedAssetFile.cs"
 "Scripts\Serialized\UnityBundle.cs"

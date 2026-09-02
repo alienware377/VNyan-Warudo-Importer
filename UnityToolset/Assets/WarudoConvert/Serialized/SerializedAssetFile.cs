@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace WarudoImporter.Serialized
@@ -93,7 +93,7 @@ namespace WarudoImporter.Serialized
 
             r.Skip(8);                        // legacy metadata size + file size
             Version = r.ReadInt32();
-            r.Skip(4);                        // legacy data offset
+            long legacyDataOffset = r.ReadUInt32();
 
             if (Version >= 9)
             {
@@ -105,6 +105,13 @@ namespace WarudoImporter.Serialized
                     r.ReadInt64();            // file size
                     DataOffset = r.ReadInt64();
                     r.ReadInt64();            // reserved
+                }
+                else
+                {
+                    // Before version 22 the only data offset is the 32-bit one in the legacy
+                    // header. Missing this leaves every object pointing at the wrong bytes,
+                    // which reads as plausible-looking garbage rather than a clean failure.
+                    DataOffset = legacyDataOffset;
                 }
             }
             else
@@ -129,14 +136,33 @@ namespace WarudoImporter.Serialized
             for (int i = 0; i < objectCount; i++)
             {
                 var o = new ObjectInfo();
-                r.Align();
-                o.PathId = r.ReadInt64();
+                if (Version >= 14) r.Align();
+                o.PathId = Version >= 14 ? r.ReadInt64() : r.ReadInt32();
                 o.ByteStart = Version >= 22 ? r.ReadInt64() : r.ReadUInt32();
                 o.ByteStart += DataOffset;
                 o.ByteSize = (int)r.ReadUInt32();
                 o.TypeId = r.ReadInt32();
-                o.Type = Types[o.TypeId];
-                o.ClassId = o.Type.ClassId;
+
+                // Older files carry the class id alongside the type index, and index the type
+                // table by class id rather than by position.
+                if (Version < 16)
+                {
+                    o.ClassId = r.ReadUInt16();
+                    o.Type = null;
+                    for (int t = 0; t < Types.Count; t++)
+                        if (Types[t].ClassId == o.TypeId) { o.Type = Types[t]; break; }
+                }
+                else
+                {
+                    o.Type = Types[o.TypeId];
+                    o.ClassId = o.Type.ClassId;
+                }
+
+                if (Version < 11) r.ReadUInt16();                  // isDestroyed
+                if (Version >= 11 && Version < 17) r.ReadInt16();  // script type index
+                if (Version == 15 || Version == 16) r.ReadByte();  // isStripped
+
+                if (o.Type == null) continue;
                 Objects.Add(o);
             }
 

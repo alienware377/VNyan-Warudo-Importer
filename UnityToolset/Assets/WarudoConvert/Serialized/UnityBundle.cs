@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 
@@ -7,9 +7,14 @@ namespace WarudoImporter.Serialized
     /// <summary>
     /// UnityFS AssetBundle reader with lazy block decompression.
     ///
-    /// Warudo character bundles run to hundreds of megabytes but the component data we
-    /// need is a fraction of a percent of that, so blocks are decompressed on demand and
-    /// kept in a small cache rather than expanding the whole archive into memory.
+    /// Bundles run to hundreds of megabytes but the component data we need is a fraction of
+    /// a percent of that, so blocks are decompressed on demand and kept in a small cache
+    /// rather than expanding the whole archive into memory.
+    ///
+    /// That only helps LZ4 bundles, which are chunked. An LZMA bundle is a SINGLE block, so
+    /// touching it at all materialises the whole archive - VRChat avatars are built this way.
+    /// Note also that a bundle's block-info header can be LZ4 while its data is LZMA, so the
+    /// header flags do not tell you which decompressor the payload needs.
     /// </summary>
     internal sealed class UnityBundle : IDisposable
     {
@@ -139,9 +144,11 @@ namespace WarudoImporter.Serialized
                     return dst;
                 }
                 case 1:
-                    throw new NotSupportedException(
-                        "This bundle uses LZMA compression, which the importer cannot read. " +
-                        "Re-export the mod with the default (LZ4) compression.");
+                {
+                    var dst = new byte[uncompressedSize];
+                    LzmaBlock.Decompress(src, 0, src.Length, dst, 0, uncompressedSize);
+                    return dst;
+                }
                 default:
                     throw new NotSupportedException("Unknown bundle compression type " + compression);
             }

@@ -298,7 +298,8 @@ the result won't look like the model the author made.
 - Mods that aren't character mods (no `sharedassets.bin`) are rejected.
 - Models whose rig can't be mapped to a humanoid need manual bone assignment via **Pick**.
 - Animations and AnimatorControllers shipped in the mod are not carried over.
-- Bundles compressed with LZMA cannot be read. Warudo's default is LZ4, so this is rare.
+- Bundles built without type trees cannot have their component data read. Warudo's exporter
+  always writes them, so this has not been seen in practice.
 - A restored component only comes back if a runtime for it exists. Magica Cloth 2, UniVRM
   spring bones and DynamicBone all ship with VNyan; anything else is reported and skipped.
 
