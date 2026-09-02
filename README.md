@@ -103,16 +103,40 @@ That single fact explains all of it: Magica Cloth, VRM spring bones and VRChat P
 arrive empty in VNyan, and no amount of having the right assemblies installed changes it,
 because the values were never inside a component to begin with.
 
-**Getting it back.** If a licensed copy of the uMod runtime (`UMod-Shared.dll`) is present,
-the importer runs the relinker itself and the model's original components come back with the
-creator's authored values — including Magica Cloth, which VNyan ships and can simulate
-natively. uMod is commercial middleware, so it is deliberately **not** bundled here. If you
-own the Warudo Creator SDK (or have Warudo installed) you already have a copy: put
-`UMod-Shared.dll` next to `WarudoImporter.dll` in the plugin folder, or point the plugin at
-your Warudo folder.
+**Getting it back — solved.** The importer reads that placeholder data straight out of the
+AssetBundle and rebuilds the real components itself. Nothing from uMod has to be installed.
 
-Without it, nothing breaks — the importer falls back to detecting swaying bone chains and
-generating physics for them, which is the default behaviour described below.
+Warudo bundles carry full type trees, so the stripped data is self-describing: the importer
+walks it, resolves the link graph, and puts every member back on a freshly added component by
+name. That means the model gets the creator's **actual** settings, not an approximation —
+every curve, every stiffness value, every collider assignment, including fields this importer
+has never heard of.
+
+What comes back, when the runtime for it exists:
+
+| Original component | In VNyan |
+| --- | --- |
+| **Magica Cloth 2** (cloth + capsule/sphere colliders) | Rebuilt and simulated **natively** — VNyan ships MagicaClothV2 |
+| **VRM spring bones** and collider groups | Rebuilt and simulated natively — VNyan ships UniVRM |
+| **VRChat PhysBones** | Rebuilt, then converted to DynamicBone with the creator's real numbers |
+
+Anything driven by a restored simulation is excluded from the sway-chain detector, so nothing
+ends up simulated twice.
+
+The log tells you what actually happened, a few seconds after the avatar appears:
+
+```
+Restored the creator's own components: rebuilt 41 (10x MagicaCloth, 18x MagicaCapsuleCollider, 7x MagicaSphereCollider, ...)
+Left 436 bone(s) to the mod's own physics.
+Physics running: 9/10 Magica Cloth built, 9 simulating; 4 DynamicBone chain(s)
+```
+
+A cloth that reports as not simulating is usually an **empty component the author left on the
+model** — one with no root bones and no renderer has nothing to simulate, and it fails in
+Warudo too. The log names it so you can check.
+
+Bundles sometimes contain two hierarchies (the Warudo character *and* a VRM export of it).
+Components belonging to the other one are reported separately, not as failures.
 
 ### Expressions and Perfect Sync (ARKit)
 
@@ -221,14 +245,35 @@ C:\Users\<you>\AppData\LocalLow\Suvidriel\VNyan\Player.log
 
 ---
 
-## Offline converter (`.warudo` → `.vsfavatar`)
+## Exporting a `.vsfavatar`
 
-`UnityToolset\Assets\WarudoConvert\` is a drop-in folder for a Unity project that already
-has UniVRM **and the shaders the mod uses** installed. The Warudo SDK project is the ideal
-host, since it has both by definition.
+A `.vsfavatar` is a Unity AssetBundle, and **only the Unity editor can build one** — a running
+player has no equivalent API. So the importer does not pretend to build one itself; it drives a
+Unity editor instead.
 
-Copy the folder into that project's `Assets`, then use the menu
-**Warudo → Convert .warudo to .vsfavatar**. Two steps:
+### From inside VNyan — **Export .vsfavatar**
+
+Analyze a model, then press **Export .vsfavatar**. The first time it asks for a Unity project
+to build in; after that it just asks where to save. It copies the converter into that project,
+runs Unity headlessly, and reports back in the log when the file is ready. The result is an
+ordinary `.vsfavatar` that VNyan loads with its normal **Load Avatar** button — no plugin
+needed on the machine that uses it.
+
+Two things the project must satisfy:
+
+- **UniVRM and the shaders the mod uses** have to be installed, or the avatar comes out
+  without VRM components and with pink materials. The Warudo SDK project is the natural
+  choice, since it has both by definition.
+- **Its Unity version must be at least the mod's.** AssetBundles are forward compatible only,
+  so a 2019.4 project cannot open a bundle built with 2021.3. The importer checks this before
+  launching Unity and tells you rather than letting it fail ten minutes in.
+
+The first run in a project imports the whole thing and can take several minutes.
+
+### By hand, in the editor
+
+`UnityToolset\Assets\WarudoConvert\` is the same converter as a drop-in folder. Copy it into
+the project's `Assets`, then use the menu **Warudo → Convert .warudo to .vsfavatar**. Two steps:
 
 1. **Stage into project** — writes the bundle's meshes, materials and textures out as real
    project assets. Textures are re-encoded as PNG because bundle textures are GPU-only; on
@@ -246,8 +291,9 @@ the result won't look like the model the author made.
 - Mods that aren't character mods (no `sharedassets.bin`) are rejected.
 - Models whose rig can't be mapped to a humanoid need manual bone assignment via **Pick**.
 - Animations and AnimatorControllers shipped in the mod are not carried over.
-- MagicaCloth and DynamicBone setups authored in the mod are not converted. Use the
-  `physbones.json` export instead.
+- Bundles compressed with LZMA cannot be read. Warudo's default is LZ4, so this is rare.
+- A restored component only comes back if a runtime for it exists. Magica Cloth 2, UniVRM
+  spring bones and DynamicBone all ship with VNyan; anything else is reported and skipped.
 
 ---
 

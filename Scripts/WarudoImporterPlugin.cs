@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -39,6 +39,9 @@ namespace WarudoImporter
         bool templateHandedOff;           // true once VNyan's cache owns it - never destroy it then
         Transform stagingHolder;          // inactive, persistent parent that hides templates pre-import
         AvatarPrep.Result prep;
+        ModRestore.Result restore;
+        string unityProjectPath;
+        VsfAvatarExport.Job exportJob;
         Texture2D coverTex;
         readonly Dictionary<HumanBodyBones, string> boneOverrides = new Dictionary<HumanBodyBones, string>();
         List<GenChain> detectedChains = new List<GenChain>();
@@ -190,11 +193,13 @@ namespace WarudoImporter
             Log("Loaded asset: " + loaded.assetName);
             Log(WarudoBundle.DescribeAssets(loaded.bundle));
 
-            template = Instantiate(loaded.prefab);
+            // Instantiate straight into the inactive staging parent. Creating it at the scene
+            // root first would activate it for one frame, and every script on the mod would
+            // run its Awake before we have had a chance to fix anything up.
+            template = Instantiate(loaded.prefab, stagingHolder, false);
             template.name = container.DisplayName;
             // Hidden via the parent, not via SetActive(false) on the object itself - see the
             // comment in VNyanBridge.Load for why that distinction is load-bearing.
-            template.transform.SetParent(stagingHolder, false);
             template.SetActive(true);
             templateHandedOff = false;
             // The bundle container can go now; the assets it produced stay alive because the
@@ -205,12 +210,19 @@ namespace WarudoImporter
             // the avatar. Everything downstream - physics conversion, native Magica Cloth, VRM
             // spring bones - depends on those components existing, and they do not until this
             // runs. No-ops when the uMod runtime is not on this machine.
-            List<string> relinkNotes = new List<string>();
-            int revived = UModRelink.Relink(template, relinkNotes);
-            for (int i = 0; i < relinkNotes.Count; i++) Log(relinkNotes[i]);
-            if (revived > 0)
-                Log("uMod relink: rebuilt " + revived + " original component(s) with the creator's " +
-                    "authored values (" + UModRelink.Source + ").");
+            restore = ModRestore.Restore(template, container.bundlePath);
+            for (int i = 0; i < restore.notes.Count; i++) Log(restore.notes[i]);
+
+            // Fall back to driving uMod's own relinker, for the rare bundle this cannot read.
+            if (restore.rebuilt == 0)
+            {
+                List<string> relinkNotes = new List<string>();
+                int revived = UModRelink.Relink(template, relinkNotes);
+                for (int i = 0; i < relinkNotes.Count; i++) Log(relinkNotes[i]);
+                if (revived > 0)
+                    Log("uMod relink: rebuilt " + revived + " original component(s) with the creator's " +
+                        "authored values (" + UModRelink.Source + ").");
+            }
 
             Log(WarudoBundle.Describe(template));
             Log(WarudoBundle.DescribeComponents(template));
@@ -270,6 +282,14 @@ namespace WarudoImporter
                     Animator anim = template.GetComponent<Animator>();
                     DynamicBoneConvert.Options dopt = new DynamicBoneConvert.Options();
                     dopt.gen = genOptions;
+                    if (restore != null)
+                    {
+                        // The mod's own Magica Cloth and spring bones are alive now, so those
+                        // chains are already simulated - converting them as well would fight.
+                        dopt.preClaimed = restore.nativelyDriven;
+                        if (restore.HasNativeCloth) dopt.fromMagicaCloth = false;
+                        if (restore.HasNativeSpringBones) dopt.fromSpringBone = false;
+                    }
                     DynamicBoneConvert.Result dres = DynamicBoneConvert.Convert(template, anim, dopt);
                     for (int i = 0; i < dres.notes.Count; i++) Log(dres.notes[i]);
                     Log("DynamicBone: " + dres.Total + " chain(s), " + dres.colliders + " collider(s).");
@@ -284,8 +304,189 @@ namespace WarudoImporter
                 Log("Handed to VNyan as \"" + Path.GetFileName(key) + "\".");
                 Log("VNyan's avatar cache is now held open for this session - it has to be, because " +
                     "that key is not a real file on disk.");
+                StartCoroutine(ReportPhysicsWhenReady());
             }
             else Log("Import failed: " + VNyanBridge.LastError);
+            Flush();
+        }
+
+        /// <summary>
+        /// Magica Cloth builds its simulation over the first frames after the avatar appears,
+        /// so the honest answer to "is the physics actually running?" is only available a
+        /// moment later. Reporting it beats asking the user to eyeball the hair.
+        /// </summary>
+        System.Collections.IEnumerator ReportPhysicsWhenReady()
+        {
+            yield return new WaitForSeconds(3f);
+
+            GameObject avatar = null;
+            try { avatar = VNyanInterface.VNyanInterface.VNyanAvatar.getAvatarObject() as GameObject; }
+            catch (Exception e) { Log("Could not read back the avatar: " + e.Message); }
+
+            if (avatar == null) { Log("Avatar not reachable yet - physics status unknown."); Flush(); yield break; }
+            Log(ModRestore.DescribePhysicsState(avatar));
+            Flush();
+        }
+
+        /// <summary>
+        /// Adds the "Export .vsfavatar" button by cloning one of the existing ones and
+        /// re-spacing the row, so the button matches the panel's styling without the .vnobj
+        /// having to be rebuilt.
+        /// </summary>
+        void AddVsfAvatarButton()
+        {
+            if (Find<Button>("Button_ExportVsf") != null) return;
+            Button phys = Find<Button>("Button_ExportPhys");
+            if (phys == null) return;
+
+            GameObject clone = Instantiate(phys.gameObject, phys.transform.parent);
+            clone.name = "Button_ExportVsf";
+            clone.transform.SetSiblingIndex(phys.transform.GetSiblingIndex() + 1);
+
+            Text label = clone.GetComponentInChildren<Text>();
+            if (label != null) label.text = "Export .vsfavatar";
+
+            Button b = clone.GetComponent<Button>();
+            if (b != null)
+            {
+                b.onClick.RemoveAllListeners();
+                b.onClick.AddListener(OnExportVsfAvatar);
+            }
+
+            // A "?" tip tags along with the clone; it would open the physbones help.
+            Transform stray = clone.transform.Find("Tip_ExportPhys");
+            if (stray != null) Destroy(stray.gameObject);
+
+            LayoutButtonRow(new string[] { "Button_Analyze", "Button_Import", "Button_ExportPhys", "Button_ExportVsf" });
+        }
+
+        /// <summary>Spreads the named buttons evenly across the span they already occupy.</summary>
+        void LayoutButtonRow(string[] names)
+        {
+            var rects = new List<RectTransform>();
+            for (int i = 0; i < names.Length; i++)
+            {
+                Button b = Find<Button>(names[i]);
+                if (b == null) return;
+                rects.Add(b.GetComponent<RectTransform>());
+            }
+
+            float left = float.MaxValue, right = float.MinValue;
+            for (int i = 0; i < rects.Count; i++)
+            {
+                RectTransform rt = rects[i];
+                float l = rt.anchoredPosition.x - rt.pivot.x * rt.sizeDelta.x;
+                if (l < left) left = l;
+                if (l + rt.sizeDelta.x > right) right = l + rt.sizeDelta.x;
+            }
+
+            const float gap = 6f;
+            float width = (right - left - gap * (rects.Count - 1)) / rects.Count;
+            if (width < 40f) return;   // too cramped to be worth rearranging
+
+            for (int i = 0; i < rects.Count; i++)
+            {
+                RectTransform rt = rects[i];
+                float l = left + i * (width + gap);
+                rt.sizeDelta = new Vector2(width, rt.sizeDelta.y);
+                rt.anchoredPosition = new Vector2(l + rt.pivot.x * width, rt.anchoredPosition.y);
+
+                // Four labels in the space of three: let the text shrink rather than clip.
+                Text t = rt.GetComponentInChildren<Text>();
+                if (t != null)
+                {
+                    t.resizeTextForBestFit = true;
+                    t.resizeTextMinSize = 9;
+                    t.resizeTextMaxSize = t.fontSize;
+                    t.horizontalOverflow = HorizontalWrapMode.Wrap;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Builds a real .vsfavatar. VNyan is a Unity player and players cannot build
+        /// AssetBundles, so this hands the job to a Unity editor running headlessly.
+        /// </summary>
+        void OnExportVsfAvatar()
+        {
+            if (exportJob != null && !exportJob.Done)
+            { Log("An export is already running - give it a moment."); Flush(); return; }
+
+            if (string.IsNullOrEmpty(selectedPath) || !File.Exists(selectedPath))
+            { Log("Choose a .warudo file first."); Flush(); return; }
+
+            if (!VsfAvatarExport.ToolsetAvailable)
+            {
+                Log("The offline converter sources are not installed next to the plugin. Point me at " +
+                    "the repo's UnityToolset\\Assets\\WarudoConvert folder.");
+                Flush();
+                string tp = NativeFileDialog.PickFolder("Locate UnityToolset\\Assets\\WarudoConvert",
+                                                        VsfAvatarExport.PluginDir);
+                if (string.IsNullOrEmpty(tp) || !VsfAvatarExport.LooksLikeToolset(tp))
+                { Log("That folder does not contain the converter (Editor\\WarudoBatchConvert.cs)."); Flush(); return; }
+                VsfAvatarExport.ConfiguredToolsetDir = tp;
+                SaveSettings();
+            }
+
+            if (!VsfAvatarExport.IsUnityProject(unityProjectPath))
+            {
+                Log("Pick the Unity project to build in. It needs UniVRM and the shaders this mod " +
+                    "uses already installed - the Warudo SDK project is the natural choice.");
+                Flush();
+                string picked = NativeFileDialog.PickFolder("Unity project to build the .vsfavatar in", unityProjectPath);
+                if (string.IsNullOrEmpty(picked)) { Log("Cancelled."); Flush(); return; }
+                if (!VsfAvatarExport.IsUnityProject(picked))
+                { Log("That folder has no Assets\\ and ProjectSettings\\, so it is not a Unity project."); Flush(); return; }
+                unityProjectPath = picked;
+                SaveSettings();
+            }
+
+            string outDir = NativeFileDialog.PickFolder("Where to save the .vsfavatar",
+                                                        Path.GetDirectoryName(selectedPath));
+            if (string.IsNullOrEmpty(outDir)) { Log("Cancelled."); Flush(); return; }
+
+            var opt = new VsfAvatarExport.Options();
+            opt.warudoPath = selectedPath;
+            opt.projectPath = unityProjectPath;
+            opt.outputDir = outDir;
+            opt.modUnityVersion = container != null ? container.unityVersion : null;
+            opt.stripAnimators = prepOptions.stripNestedAnimators;
+            opt.disableConstraints = prepOptions.disableConstraints;
+            opt.writePhysBonesJson = !convertDynBone;
+
+            var notes = new List<string>();
+            exportJob = VsfAvatarExport.Start(opt, notes);
+            for (int i = 0; i < notes.Count; i++) Log(notes[i]);
+            Flush();
+
+            if (exportJob != null) StartCoroutine(WatchExport(exportJob));
+        }
+
+        System.Collections.IEnumerator WatchExport(VsfAvatarExport.Job job)
+        {
+            int ticks = 0;
+            while (!job.Done)
+            {
+                yield return new WaitForSeconds(5f);
+                if (++ticks % 6 == 0)
+                {
+                    Log("...still building (" + (int)job.Elapsed.TotalSeconds + "s)");
+                    Flush();
+                }
+            }
+
+            string produced = job.ProducedFile();
+            if (job.ExitCode == 0 && !string.IsNullOrEmpty(produced) && File.Exists(produced))
+            {
+                Log("Wrote " + produced + " (" + (new FileInfo(produced).Length / (1024 * 1024)) + " MB). " +
+                    "Load it with VNyan's normal Load Avatar button - no plugin needed.");
+            }
+            else
+            {
+                Log("The .vsfavatar build failed (Unity exit code " + job.ExitCode + "). Last of its log:");
+                Log(job.Tail(25));
+                Log("Full log: " + job.logPath);
+            }
             Flush();
         }
 
@@ -329,6 +530,7 @@ namespace WarudoImporter
             loaded = null;
             container = null;
             prep = null;
+            restore = null;
             if (coverTex != null) { Destroy(coverTex); coverTex = null; }
             if (coverImage != null) coverImage.texture = null;
         }
@@ -364,6 +566,7 @@ namespace WarudoImporter
             WireButton("Button_PickerClose", ClosePicker);
             WireButton("Button_ChainsAll", delegate { SetAllChains(true); });
             WireButton("Button_ChainsNone", delegate { SetAllChains(false); });
+            AddVsfAvatarButton();
 
             BindToggle("Toggle_StripAnimators", prepOptions.stripNestedAnimators,
                        delegate (bool v) { prepOptions.stripNestedAnimators = v; SaveSettings(); });
@@ -525,6 +728,8 @@ namespace WarudoImporter
                 Dictionary<string, string> s = VNyanInterface.VNyanInterface.VNyanSettings.loadSettings(SETTINGS_ID);
                 if (s == null) return;
                 selectedPath = Get(s, "path", null);
+                unityProjectPath = Get(s, "unityProject", null);
+                VsfAvatarExport.ConfiguredToolsetDir = Get(s, "toolsetDir", null);
                 prepOptions.stripNestedAnimators = GetBool(s, "stripAnimators", true);
                 prepOptions.disableConstraints = GetBool(s, "disableConstraints", true);
                 genOptions.generateColliders = GetBool(s, "genColliders", true);
@@ -561,6 +766,8 @@ namespace WarudoImporter
                 s["physScale"] = genOptions.scale.ToString("0.###", CultureInfo.InvariantCulture);
                 s["convertDynBone"] = convertDynBone ? "1" : "0";
                 if (!string.IsNullOrEmpty(UModRelink.ConfiguredPath)) s["umodPath"] = UModRelink.ConfiguredPath;
+                if (!string.IsNullOrEmpty(unityProjectPath)) s["unityProject"] = unityProjectPath;
+                if (!string.IsNullOrEmpty(VsfAvatarExport.ConfiguredToolsetDir)) s["toolsetDir"] = VsfAvatarExport.ConfiguredToolsetDir;
                 VNyanInterface.VNyanInterface.VNyanSettings.saveSettings(SETTINGS_ID, s);
             }
             catch (Exception e) { Debug.LogWarning(LOG + "saveSettings: " + e.Message); }

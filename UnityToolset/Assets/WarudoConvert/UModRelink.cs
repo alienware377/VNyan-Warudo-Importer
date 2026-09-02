@@ -179,7 +179,8 @@ namespace WarudoImporter
                 for (int k = 0; k < ps.Length; k++)
                 {
                     if (k > 0) sb.Append(", ");
-                    sb.Append(ps[k].ParameterType.Name);
+                    // Parameter NAMES are what tell us what the undocumented flags mean.
+                    sb.Append(ps[k].ParameterType.Name).Append(' ').Append(ps[k].Name);
                 }
                 sb.Append(") ");
             }
@@ -201,38 +202,197 @@ namespace WarudoImporter
                 return 0;
             }
 
+            InstallHooks(notes);
+
             int before = CountLiveForeign(root);
+
+            try { if (s_initHandlers != null) s_initHandlers.Invoke(null, null); }
+            catch (Exception e) { if (notes != null) notes.Add("uMod InitializeHandlers: " + Unwrap(e).Message); }
+
+            // The flags are RelinkModObject(go, isSceneLink, relinkDependencies) and
+            // PreRelinkModObject(go, relinkDependencies) - read from the parameter names on the
+            // loaded assembly. An imported avatar is a prefab instance, not a scene link, and its
+            // dependencies do need relinking, so (false, true) is the correct call. The other
+            // combinations stay as fallbacks in case a different uMod build reorders them; each
+            // attempt is judged by whether live components actually appeared, so a wrong guess
+            // can never look like success.
+            bool[][] combos = { new[] { false, true }, new[] { true, true }, new[] { false, false }, new[] { true, false } };
+            string lastErr = null;
+            for (int i = 0; i < combos.Length; i++)
+            {
+                try
+                {
+                    if (s_preRelink != null) InvokeOn(s_preRelink, root, combos[i]);
+                    InvokeOn(s_relink, root, combos[i]);
+                }
+                catch (Exception e) { lastErr = Unwrap(e).Message; continue; }
+
+                int gained = CountLiveForeign(root) - before;
+                if (gained > 0)
+                {
+                    if (notes != null && i > 0)
+                        notes.Add("uMod relink used flag set #" + (i + 1) + " (" +
+                                  string.Join(",", new[] { combos[i][0].ToString(), combos[i][1].ToString() }) + ").");
+                    return gained;
+                }
+            }
+
+            if (notes != null)
+                notes.Add("uMod relink ran but produced no components" +
+                          (lastErr != null ? " (last error: " + lastErr + ")" : "") +
+                          ". Signatures: " + Describe());
+            return 0;
+        }
+
+        static Exception Unwrap(Exception e)
+        {
+            return (e is TargetInvocationException && e.InnerException != null) ? e.InnerException : e;
+        }
+
+        /// <summary>
+        /// Installs uMod's two STATIC resolver hooks, which the hosting application is expected to
+        /// provide and which are null in any host that is not Warudo. Without them
+        /// LinkBehaviourV2.PreDeserialize throws a NullReferenceException and every relink is
+        /// silently swallowed into a warning:
+        ///
+        ///     Func&lt;Type, Assembly&gt;                        onLinkAssembly
+        ///     Func&lt;ModIdentity, TypeReference, object&gt;     onLinkRequest
+        ///
+        /// onLinkAssembly answers "which assembly defines this type", and onLinkRequest resolves a
+        /// TypeReference (assembly name + class name) to an instance. Both are answered from the
+        /// assemblies already loaded in this process, which is exactly what we want: the mod's
+        /// components rebind against the host's own Magica Cloth / UniVRM builds.
+        /// </summary>
+        static bool InstallHooks(List<string> notes)
+        {
+            if (s_hooksInstalled) return true;
+            Type tRef = s_umod != null ? s_umod.GetType("UMod.Shared.Linker.TypeReference") : null;
+            if (tRef == null) return false;
+
+            const BindingFlags ANY = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
+            FieldInfo fAsm = tRef.GetField("onLinkAssembly", ANY);
+            FieldInfo fReq = tRef.GetField("onLinkRequest", ANY);
+
             try
             {
-                if (s_initHandlers != null) s_initHandlers.Invoke(null, null);
-                if (s_preRelink != null) InvokeOn(s_preRelink, root);
-                InvokeOn(s_relink, root);
+                if (fAsm != null && fAsm.GetValue(null) == null)
+                {
+                    MethodInfo mi = typeof(UModRelink).GetMethod("ResolveAssembly",
+                        BindingFlags.NonPublic | BindingFlags.Static);
+                    fAsm.SetValue(null, Delegate.CreateDelegate(fAsm.FieldType, mi));
+                }
+                if (fReq != null && fReq.GetValue(null) == null)
+                {
+                    // The first parameter type (ModIdentity) is only carried through, so the
+                    // delegate is built against the field's own signature rather than a
+                    // hard-referenced one.
+                    MethodInfo mi = typeof(UModRelink).GetMethod("ResolveLinkRequest",
+                        BindingFlags.NonPublic | BindingFlags.Static);
+                    fReq.SetValue(null, Delegate.CreateDelegate(fReq.FieldType, mi));
+                }
+                s_hooksInstalled = true;
+                return true;
             }
             catch (Exception e)
             {
-                Exception inner = e is TargetInvocationException && e.InnerException != null ? e.InnerException : e;
-                if (notes != null) notes.Add("uMod relink failed: " + inner.Message);
-                return 0;
+                if (notes != null) notes.Add("uMod hook install failed: " + Unwrap(e).Message);
+                return false;
             }
-            int after = CountLiveForeign(root);
-            return Mathf.Max(0, after - before);
         }
 
-        static void InvokeOn(MethodInfo m, GameObject root)
+        static bool s_hooksInstalled;
+
+        /// <summary>Which assembly defines this type - it is already loaded, so just report it.</summary>
+        static Assembly ResolveAssembly(Type type)
+        {
+            return type != null ? type.Assembly : null;
+        }
+
+        /// <summary>
+        /// Resolves a TypeReference to an instance. The reference names an assembly and a class;
+        /// both are looked up among the loaded assemblies so the mod's components bind to the
+        /// host's own copies of Magica Cloth, UniVRM and friends.
+        /// </summary>
+        static object ResolveLinkRequest(object modIdentity, object typeReference)
+        {
+            if (typeReference == null) return null;
+            try
+            {
+                Type tr = typeReference.GetType();
+                const BindingFlags ANY = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+                FieldInfo fTarget = tr.GetField("targetObject", ANY);
+                if (fTarget != null)
+                {
+                    object existing = fTarget.GetValue(typeReference);
+                    if (existing != null) return existing;
+                }
+
+                string asmName = tr.GetField("assemblyName", ANY) != null
+                    ? tr.GetField("assemblyName", ANY).GetValue(typeReference) as string : null;
+                string clsName = tr.GetField("scriptName", ANY) != null
+                    ? tr.GetField("scriptName", ANY).GetValue(typeReference) as string : null;
+                if (string.IsNullOrEmpty(clsName)) return null;
+
+                Type resolved = FindLoadedType(asmName, clsName);
+                return resolved;
+            }
+            catch { return null; }
+        }
+
+        static Type FindLoadedType(string assemblyName, string className)
+        {
+            Assembly[] all = AppDomain.CurrentDomain.GetAssemblies();
+            // Prefer the named assembly, so a class that exists in two of them is not confused.
+            if (!string.IsNullOrEmpty(assemblyName))
+                for (int i = 0; i < all.Length; i++)
+                {
+                    if (all[i].GetName().Name != assemblyName) continue;
+                    Type t = all[i].GetType(className);
+                    if (t != null) return t;
+                }
+            for (int i = 0; i < all.Length; i++)
+            {
+                Type t = null;
+                try { t = all[i].GetType(className); }
+                catch { }
+                if (t != null) return t;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Binds arguments by parameter NAME, not position. PreRelinkModObject's single bool is
+        /// relinkDependencies while RelinkModObject's first bool is isSceneLink, so filling
+        /// positionally would hand the scene-link value to the dependency flag and quietly relink
+        /// the wrong thing. flags[0] = isSceneLink, flags[1] = relinkDependencies.
+        /// </summary>
+        static void InvokeOn(MethodInfo m, GameObject root, bool[] flags)
         {
             ParameterInfo[] ps = m.GetParameters();
             object[] args = new object[ps.Length];
+            int unnamedBool = 0;
             for (int i = 0; i < ps.Length; i++)
             {
                 Type pt = ps[i].ParameterType;
+                string pn = (ps[i].Name ?? "").ToLowerInvariant();
                 if (pt == typeof(GameObject)) args[i] = root;
                 else if (pt == typeof(Transform)) args[i] = root.transform;
-                else if (pt == typeof(bool)) args[i] = true;
+                else if (pt == typeof(bool))
+                {
+                    if (pn.Contains("scene")) args[i] = flags[0];
+                    else if (pn.Contains("depend")) args[i] = flags[1];
+                    else args[i] = flags[Mathf.Min(unnamedBool++, flags.Length - 1)];
+                }
                 else args[i] = pt.IsValueType ? Activator.CreateInstance(pt) : null;
             }
             m.Invoke(null, args);
         }
 
+        /// <summary>
+        /// Counts REBUILT components only: neither Unity's own, nor uMod's link scaffolding.
+        /// Counting the scaffolding would make the before/after comparison meaningless, since the
+        /// LinkBehaviourV2 placeholders are themselves third-party components.
+        /// </summary>
         static int CountLiveForeign(GameObject root)
         {
             int n = 0;
@@ -241,7 +401,9 @@ namespace WarudoImporter
             {
                 if (all[i] == null) continue;
                 string ns = all[i].GetType().Namespace ?? "";
-                if (!ns.StartsWith("UnityEngine")) n++;
+                if (ns.StartsWith("UnityEngine")) continue;
+                if (ns.StartsWith("UMod")) continue;
+                n++;
             }
             return n;
         }
