@@ -94,17 +94,40 @@ namespace WarudoImporter.Serialized
         /// <summary>Renderer / other component path id -> the GameObject that carries it.</summary>
         public readonly Dictionary<long, long> ComponentToGameObject = new Dictionary<long, long>();
 
+        /// <summary>Ordinary MonoBehaviours, for bundles that were not built by uMod.</summary>
+        public readonly List<LinkedComponent> PlainComponents = new List<LinkedComponent>();
+
+        /// <summary>Restricts which plain classes are decoded. Null means all of them.</summary>
+        public HashSet<string> WantedClasses;
+
         public readonly List<string> Notes = new List<string>();
+
+        /// <summary>Reads a bundle, decoding only the listed MonoBehaviour classes.</summary>
+        public static LinkPayload Read(string bundlePath, IEnumerable<string> wantedClasses)
+        {
+            var p = new LinkPayload();
+            if (wantedClasses != null)
+            {
+                p.WantedClasses = new HashSet<string>();
+                foreach (var c in wantedClasses) p.WantedClasses.Add(c);
+            }
+            p.ReadFrom(bundlePath);
+            return p;
+        }
 
         public static LinkPayload Read(string bundlePath)
         {
             var p = new LinkPayload();
+            p.ReadFrom(bundlePath);
+            return p;
+        }
+
+        void ReadFrom(string bundlePath)
+        {
             using (var bundle = new UnityBundle(bundlePath))
             {
-                var file = OpenSerializedFile(bundle);
-                p.Scan(file);
+                Scan(OpenSerializedFile(bundle));
             }
-            return p;
         }
 
         /// <summary>
@@ -153,6 +176,7 @@ namespace WarudoImporter.Serialized
             var rawTransforms = new Dictionary<long, Dictionary<string, object>>();
             var linkBehaviours = new List<KeyValuePair<long, Dictionary<string, object>>>();
             var linkCaches = new List<Dictionary<string, object>>();
+            var plainBehaviours = new List<KeyValuePair<long, Dictionary<string, object>>>();
 
             foreach (var o in ordered)
             {
@@ -210,6 +234,8 @@ namespace WarudoImporter.Serialized
                             linkBehaviours.Add(new KeyValuePair<long, Dictionary<string, object>>(o.PathId, d));
                         else if (d.ContainsKey("links"))
                             linkCaches.Add(d);
+                        else
+                            plainBehaviours.Add(new KeyValuePair<long, Dictionary<string, object>>(o.PathId, d));
                         break;
                 }
             }
@@ -222,6 +248,119 @@ namespace WarudoImporter.Serialized
                 var lc = ParseLink(kv.Key, kv.Value);
                 if (lc != null) Components.Add(lc);
             }
+
+            CollectPlain(plainBehaviours, monoScripts);
+        }
+
+        /// <summary>
+        /// Turns ordinary (non-uMod) MonoBehaviours into the same shape as the link-decoded ones,
+        /// so the rebuilder can restore either without caring where the data came from.
+        ///
+        /// A bundle that was not built by uMod stores component data normally, which means the
+        /// values are readable straight from the type tree even when the assembly that declares
+        /// the class is nowhere on the machine. That is what makes a VRChat avatar readable
+        /// without the VRChat SDK.
+        /// </summary>
+        void CollectPlain(List<KeyValuePair<long, Dictionary<string, object>>> behaviours,
+                          Dictionary<long, string[]> monoScripts)
+        {
+            foreach (var kv in behaviours)
+            {
+                var d = kv.Value;
+                long scriptId = GetPPtr(d, "m_Script");
+                string[] script;
+                if (scriptId == 0 || !monoScripts.TryGetValue(scriptId, out script)) continue;
+
+                string ns = script[1], cls = script[2];
+                if (string.IsNullOrEmpty(cls)) continue;
+                string full = string.IsNullOrEmpty(ns) ? cls : ns + "." + cls;
+
+                if (WantedClasses != null && !WantedClasses.Contains(full)) continue;
+
+                var lc = new LinkedComponent
+                {
+                    PathId = kv.Key,
+                    GameObjectPathId = GetPPtr(d, "m_GameObject"),
+                    TypeName = full,
+                    AssemblyName = script[0],
+                };
+
+                foreach (var field in d)
+                {
+                    // Unity's own MonoBehaviour bookkeeping is not part of the component's data.
+                    if (field.Key == "m_GameObject" || field.Key == "m_Script" ||
+                        field.Key == "m_ObjectHideFlags" || field.Key == "m_CorrespondingSourceObject" ||
+                        field.Key == "m_PrefabInstance" || field.Key == "m_PrefabAsset" ||
+                        field.Key == "m_EditorHideFlags" || field.Key == "m_EditorClassIdentifier")
+                        continue;
+                    lc.Members[field.Key] = FromTypeTree(field.Value, 0);
+                }
+
+                PlainComponents.Add(lc);
+            }
+        }
+
+        /// <summary>Converts a raw type-tree value into the rebuilder's value model.</summary>
+        internal static LinkValue FromTypeTree(object raw, int depth)
+        {
+            if (raw == null || depth > 24) return LinkValue.Null;
+
+            if (raw is string) return new LinkValue { Kind = LinkKind.String, Text = (string)raw };
+            if (raw is bool) return new LinkValue { Kind = LinkKind.Bool, Boolean = (bool)raw };
+            if (raw is float || raw is double || raw is int || raw is uint || raw is long ||
+                raw is ulong || raw is short || raw is ushort || raw is byte || raw is sbyte)
+                return new LinkValue { Kind = LinkKind.Number, Number = ToDouble(raw) };
+
+            var bytes = raw as byte[];
+            if (bytes != null)
+            {
+                var ba = new LinkValue { Kind = LinkKind.Array, Items = new List<LinkValue>(bytes.Length) };
+                foreach (byte b in bytes) ba.Items.Add(new LinkValue { Kind = LinkKind.Number, Number = b });
+                return ba;
+            }
+
+            var list = raw as List<object>;
+            if (list != null)
+            {
+                var a = new LinkValue { Kind = LinkKind.Array, Items = new List<LinkValue>(list.Count) };
+                foreach (var item in list) a.Items.Add(FromTypeTree(item, depth + 1));
+                return a;
+            }
+
+            var dict = raw as Dictionary<string, object>;
+            if (dict == null) return LinkValue.Null;
+
+            // A PPtr is a two-field struct; treat it as an object reference, not a nested class.
+            if (dict.Count == 2 && dict.ContainsKey("m_FileID") && dict.ContainsKey("m_PathID"))
+            {
+                long pid = GetLong(dict, "m_PathID");
+                if (pid == 0) return LinkValue.Null;
+                return new LinkValue { Kind = LinkKind.UnityObject, ObjectPathId = pid, ObjectLinkType = 3 };
+            }
+
+            if (dict.ContainsKey("m_Curve"))
+            {
+                var curve = new LinkValue { Kind = LinkKind.Curve, CurveKeys = new List<float[]>() };
+                var keys = Get(dict, "m_Curve") as List<object>;
+                if (keys != null)
+                    foreach (var item in keys)
+                    {
+                        var k = item as Dictionary<string, object>;
+                        if (k == null) continue;
+                        curve.CurveKeys.Add(new[]
+                        {
+                            (float)ToDouble(Get(k, "time")),
+                            (float)ToDouble(Get(k, "value")),
+                            (float)ToDouble(Get(k, "inSlope")),
+                            (float)ToDouble(Get(k, "outSlope")),
+                        });
+                    }
+                return curve;
+            }
+
+            var inst = new LinkValue { Kind = LinkKind.Instance, Members = new Dictionary<string, LinkValue>() };
+            foreach (var field in dict) inst.Members[field.Key] = FromTypeTree(field.Value, depth + 1);
+            return inst;
         }
 
         static long ComponentPathId(object entry)
