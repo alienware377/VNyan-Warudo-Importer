@@ -82,6 +82,27 @@ namespace WarudoImporter
 
         // ------------------------------------------------------------------ small helpers
 
+        static object GetFieldValue(object target, string name)
+        {
+            if (target == null) return null;
+            FieldInfo f = target.GetType().GetField(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            if (f == null) return null;
+            try { return f.GetValue(target); }
+            catch { return null; }
+        }
+
+        static string GetStringField(object target, string name)
+        {
+            return GetFieldValue(target, name) as string;
+        }
+
+        /// <summary>How many clips a BlendShapeAvatar defines, for the log.</summary>
+        public static int ClipCount(UnityEngine.Object blendShapeAvatar)
+        {
+            IList l = GetFieldValue(blendShapeAvatar, "Clips") as IList;
+            return l != null ? l.Count : 0;
+        }
+
         static void SetField(object target, string name, object value)
         {
             if (target == null) return;
@@ -164,12 +185,32 @@ namespace WarudoImporter
         /// </summary>
         public static Component AddBlendShapeProxy(GameObject root, List<ClipPlan> plans, out int boundShapes)
         {
+            return AddBlendShapeProxy(root, plans, null, out boundShapes);
+        }
+
+        /// <summary>
+        /// Builds (or extends) the avatar's blendshape proxy.
+        ///
+        /// When the mod ships its own BlendShapeAvatar it is used as the base and only clips it
+        /// does NOT already define are added. The creator's clips are authored: they carry the
+        /// right binary flags, material bindings and multi-mesh bindings, none of which can be
+        /// recovered by inspecting mesh names. Overwriting them with reconstructions would be a
+        /// downgrade, so reconstruction is only ever used to fill gaps.
+        /// </summary>
+        public static Component AddBlendShapeProxy(GameObject root, List<ClipPlan> plans,
+                                                   UnityEngine.Object existingAvatar, out int boundShapes)
+        {
             boundShapes = 0;
             Scan();
             if (tProxy == null || tAvatarSO == null || tClip == null || tBinding == null) return null;
 
-            ScriptableObject avatarSO = ScriptableObject.CreateInstance(tAvatarSO);
-            avatarSO.name = root.name + "_BlendShapes";
+            ScriptableObject avatarSO = existingAvatar as ScriptableObject;
+            bool reusing = avatarSO != null && tAvatarSO.IsInstanceOfType(avatarSO);
+            if (!reusing)
+            {
+                avatarSO = ScriptableObject.CreateInstance(tAvatarSO);
+                avatarSO.name = root.name + "_BlendShapes";
+            }
 
             FieldInfo clipsField = tAvatarSO.GetField("Clips", BindingFlags.Public | BindingFlags.Instance);
             IList clips = clipsField != null ? clipsField.GetValue(avatarSO) as IList : null;
@@ -179,7 +220,27 @@ namespace WarudoImporter
                 clips = (IList)Activator.CreateInstance(listType);
                 if (clipsField != null) clipsField.SetValue(avatarSO, clips);
             }
-            clips.Clear();
+
+            // Names the mod already defines. Compared case-insensitively so a reconstruction
+            // never shadows an authored clip that differs only in spelling.
+            HashSet<string> existingNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> existingPresets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (reusing)
+            {
+                foreach (object cl in clips)
+                {
+                    if (cl == null) continue;
+                    string nm = GetStringField(cl, "BlendShapeName");
+                    if (!string.IsNullOrEmpty(nm)) existingNames.Add(nm);
+                    object pv = GetFieldValue(cl, "Preset");
+                    if (pv != null)
+                    {
+                        string pn = pv.ToString();
+                        if (!string.IsNullOrEmpty(pn) && pn != "Unknown") existingPresets.Add(pn);
+                    }
+                }
+            }
+            else clips.Clear();
 
             Dictionary<string, ClipPlan> byPreset = new Dictionary<string, ClipPlan>(StringComparer.OrdinalIgnoreCase);
             List<ClipPlan> custom = new List<ClipPlan>();
@@ -197,6 +258,8 @@ namespace WarudoImporter
             {
                 string presetName = presetOrder[i];
                 if (presetName == "value__") continue;
+                // The mod already defines this expression - leave the author's version alone.
+                if (existingPresets.Contains(presetName) || existingNames.Contains(presetName)) continue;
 
                 ClipPlan plan;
                 byPreset.TryGetValue(presetName, out plan);
@@ -241,6 +304,8 @@ namespace WarudoImporter
             {
                 ClipPlan plan = custom[c];
                 if (plan.shapes == null || plan.shapes.Count == 0) continue;
+                // Never shadow a clip the mod author already shipped.
+                if (existingNames.Contains(plan.customName)) continue;
 
                 List<object> made = new List<object>();
                 foreach (ShapeRef s in plan.shapes)

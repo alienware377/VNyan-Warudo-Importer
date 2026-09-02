@@ -24,6 +24,7 @@
 "Scripts\BlendShapeMapper.cs"
 "Scripts\PhysBonesGen.cs"
 "Scripts\DynamicBoneConvert.cs"
+"Scripts\UModRelink.cs"
 "Scripts\VrmReflect.cs"
 "Scripts\AvatarPrep.cs"
 "Scripts\VNyanBridge.cs"

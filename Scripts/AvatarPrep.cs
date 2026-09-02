@@ -28,6 +28,13 @@ namespace WarudoImporter
             public bool stripNestedAnimators = true;
             /// <summary>Constraints authored for another host usually just yank bones around in VNyan.</summary>
             public bool disableConstraints = true;
+            /// <summary>Give every remaining mesh blendshape its own clip, not just the known ones.</summary>
+            public bool exposeAllBlendShapes = true;
+            /// <summary>
+            /// The mod's own BlendShapeAvatar, when the bundle ships one. Its clips are authored
+            /// and always win; reconstruction only fills what it does not already define.
+            /// </summary>
+            public UnityEngine.Object modBlendShapeAvatar;
         }
 
         public class Result
@@ -40,6 +47,9 @@ namespace WarudoImporter
             public int boundBlendShapes;
             public bool perfectSync;
             public int arKitClips;
+            public int extraClips;
+            /// <summary>Clips the mod itself shipped, which are kept as authored.</summary>
+            public int modClips;
             public List<string> notes = new List<string>();
             public List<string> errors = new List<string>();
             public bool Ok { get { return errors.Count == 0; } }
@@ -55,11 +65,16 @@ namespace WarudoImporter
                                   (boneMap.missingRequired.Count > 0
                                       ? ", MISSING " + string.Join(", ", Names(boneMap.missingRequired))
                                       : ""));
+                if (modClips > 0)
+                    sb.AppendLine("Using the mod's own expression set: " + modClips +
+                                  " authored clips kept as-is; only gaps were filled.");
                 sb.AppendLine("Expression clips bound: " + boundBlendShapes);
                 if (arKitClips > 0)
                     sb.AppendLine("Perfect Sync: " + arKitClips + " ARKit clips created (face tracking will drive them).");
                 else if (perfectSync)
                     sb.AppendLine("Perfect Sync shapes detected but NO clips were created - face tracking will not reach them.");
+                if (extraClips > 0)
+                    sb.AppendLine("Other blendshapes exposed: " + extraClips + " clips (every remaining shape on the meshes).");
                 for (int i = 0; i < notes.Count; i++) sb.AppendLine("- " + notes[i]);
                 for (int i = 0; i < errors.Count; i++) sb.AppendLine("! " + errors[i]);
                 return sb.ToString();
@@ -122,11 +137,26 @@ namespace WarudoImporter
                 r.arKitClips = arkit.Count;
             }
 
+            // Everything else the model author authored - custom expressions, toggles, shapes
+            // that match no known convention - gets a clip too, so nothing on the mesh is
+            // unreachable from the host's expression system or node graph.
+            if (opt.exposeAllBlendShapes)
+            {
+                List<ClipPlan> rest = BlendShapeMapper.PlanAllRemaining(root, r.clipPlans);
+                if (rest.Count > 0)
+                {
+                    r.clipPlans.AddRange(rest);
+                    r.extraClips = rest.Count;
+                }
+            }
+
             int bound;
-            Component proxy = VrmReflect.AddBlendShapeProxy(root, r.clipPlans, out bound);
+            if (opt.modBlendShapeAvatar != null)
+                r.modClips = VrmReflect.ClipCount(opt.modBlendShapeAvatar);
+            Component proxy = VrmReflect.AddBlendShapeProxy(root, r.clipPlans, opt.modBlendShapeAvatar, out bound);
             r.boundBlendShapes = bound;
             if (proxy == null) r.errors.Add("Failed to attach VRMBlendShapeProxy.");
-            else if (bound == 0)
+            else if (bound == 0 && r.modClips == 0)
                 r.notes.Add("No blendshape names matched a VRM preset. Expressions will need manual " +
                             "setup in VNyan, but raw mesh blendshapes still work.");
 

@@ -32,6 +32,7 @@ namespace WarudoImporter
         {
             public bool fromPhysBone = true;
             public bool fromSpringBone = true;
+            public bool fromMagicaCloth = true;
             public bool heuristicFallback = true;   // synthesize for uncovered sway chains
             public GenOptions gen;                   // reused sway-chain detection knobs
         }
@@ -40,11 +41,32 @@ namespace WarudoImporter
         {
             public int fromPhysBone;
             public int fromSpringBone;
+            public int fromMagicaCloth;
             public int fromHeuristic;
             public int colliders;
             public bool dynamicBoneAvailable;
             public List<string> notes = new List<string>();
-            public int Total { get { return fromPhysBone + fromSpringBone + fromHeuristic; } }
+            public int Total { get { return fromPhysBone + fromSpringBone + fromMagicaCloth + fromHeuristic; } }
+        }
+
+        /// <summary>
+        /// Loads the physics assemblies the host ships but may never have touched.
+        ///
+        /// This has to happen BEFORE the avatar bundle is loaded. Unity binds a bundle's
+        /// MonoBehaviours by (assembly, namespace, class) against assemblies already in the
+        /// domain; an assembly that is present on disk but never referenced by any host code is
+        /// simply not there yet, and every component that needs it deserializes as a dead
+        /// "missing script" with its authored values unreachable. Touching the assembly once is
+        /// enough to make those components come back with their data intact.
+        /// </summary>
+        public static void PreloadPhysicsAssemblies()
+        {
+            string[] names = { "MagicaClothV2", "MagicaCloth", "VRM", "SPCRJointDynamics" };
+            for (int i = 0; i < names.Length; i++)
+            {
+                try { Assembly.Load(names[i]); }
+                catch { /* not shipped by this host - nothing to revive */ }
+            }
         }
 
         // ---- VNyan's DynamicBone types (Assembly-CSharp), resolved once ----
@@ -78,6 +100,30 @@ namespace WarudoImporter
 
         public static bool DynamicBoneAvailable { get { Scan(); return tDB != null; } }
 
+        /// <summary>
+        /// Which physics component types are reachable in this host, for the log. If a source
+        /// type is missing here, models using it will fall back to generated sway instead of the
+        /// creator's authored values, and this line is how you tell which case you are in.
+        /// </summary>
+        public static string DescribePhysicsAssemblies()
+        {
+            string[][] probes =
+            {
+                new string[] { "DynamicBone", "DynamicBone" },
+                new string[] { "MagicaCloth2.MagicaCloth", "MagicaCloth2" },
+                new string[] { "MagicaCloth.MagicaBoneCloth", "MagicaCloth1" },
+                new string[] { "VRM.VRMSpringBone", "VRMSpringBone" },
+                new string[] { "VRC.SDK3.Dynamics.PhysBone.Components.VRCPhysBone", "VRCPhysBone" }
+            };
+            List<string> have = new List<string>(), missing = new List<string>();
+            for (int i = 0; i < probes.Length; i++)
+            {
+                if (FindType(probes[i][0]) != null) have.Add(probes[i][1]);
+                else missing.Add(probes[i][1]);
+            }
+            return "yes[" + string.Join(",", have.ToArray()) + "] no[" + string.Join(",", missing.ToArray()) + "]";
+        }
+
         // ------------------------------------------------------------------ entry point
 
         public static Result Convert(GameObject root, Animator anim, Options opt)
@@ -103,6 +149,7 @@ namespace WarudoImporter
 
             if (opt.fromPhysBone) ConvertPhysBones(root, r, claimed, pbColMap);
             if (opt.fromSpringBone) ConvertSpringBones(root, r, claimed);
+            if (opt.fromMagicaCloth) ConvertMagicaCloth(root, r, claimed);
             if (opt.heuristicFallback) ConvertHeuristic(root, anim, opt, r, claimed);
 
             if (r.Total == 0)
@@ -253,6 +300,221 @@ namespace WarudoImporter
                 }
             }
             if (r.fromSpringBone > 0) r.notes.Add("Converted " + r.fromSpringBone + " VRMSpringBone chain(s) to DynamicBone.");
+        }
+
+        // ------------------------------------------------------------------ MagicaCloth 2
+
+        /// <summary>
+        /// Converts MagicaCloth 2 bone chains to DynamicBone.
+        ///
+        /// Only BoneCloth/BoneSpring setups translate: those drive a bone hierarchy, which is
+        /// what DynamicBone also does. MeshCloth simulates mesh vertices directly and has no
+        /// DynamicBone equivalent, so it is reported and skipped rather than approximated badly.
+        ///
+        /// Requires the MagicaClothV2 assembly to have been loaded before the avatar bundle -
+        /// see PreloadPhysicsAssemblies. Without it these components are dead scripts and their
+        /// authored values cannot be read at all.
+        /// </summary>
+        static void ConvertMagicaCloth(GameObject root, Result r, HashSet<Transform> claimed)
+        {
+            Type tMC = FindType("MagicaCloth2.MagicaCloth");
+            if (tMC == null) return;                     // not shipped / not loaded
+
+            Component[] comps = root.GetComponentsInChildren(tMC, true);
+            if (comps.Length == 0) return;
+
+            int meshCloth = 0;
+            List<Component> spent = new List<Component>();
+            Dictionary<Component, Component> colMap = new Dictionary<Component, Component>();
+
+            for (int i = 0; i < comps.Length; i++)
+            {
+                Component mc = comps[i];
+                if (mc == null) continue;
+
+                object sd = GetProp(mc, "SerializeData");
+                if (sd == null) sd = GetField(mc.GetType(), mc, "serializeData");
+                if (sd == null) continue;
+                Type tSd = sd.GetType();
+
+                // MeshCloth = 0, BoneCloth = 1, BoneSpring = 10.
+                int clothType = GetEnumInt(tSd, sd, "clothType", 1);
+                if (clothType == 0) { meshCloth++; continue; }
+
+                IList roots = GetField(tSd, sd, "rootBones") as IList;
+                if (roots == null || roots.Count == 0) continue;
+
+                // Authored values. Curve-wrapped numbers carry a plain scalar in .value that is
+                // correct whether or not the curve is enabled.
+                float damping = CurveValue(GetField(tSd, sd, "damping"), 0.05f);
+                float radius = CurveValue(GetField(tSd, sd, "radius"), 0.02f);
+                float gravity = GetFloat(tSd, sd, "gravity", 0f);
+                Vector3 gravityDir = Float3ToVector3(GetField(tSd, sd, "gravityDirection"), Vector3.down);
+
+                float stiffness = 0f;
+                object angleRest = GetField(tSd, sd, "angleRestorationConstraint");
+                if (angleRest != null && GetBool(angleRest.GetType(), angleRest, "useAngleRestoration", true))
+                    stiffness = CurveValue(GetField(angleRest.GetType(), angleRest, "stiffness"), 0.2f);
+
+                float inert = 0f;
+                object inertia = GetField(tSd, sd, "inertiaConstraint");
+                if (inertia != null)
+                {
+                    // Magica's worldInertia is "how much world movement is followed" (1 = follow
+                    // fully); DynamicBone's m_Inert is "how much movement is IGNORED". Opposite
+                    // senses, so it inverts.
+                    float worldInertia = GetFloat(inertia.GetType(), inertia, "worldInertia", 1f);
+                    inert = Mathf.Clamp01(1f - worldInertia);
+                }
+
+                object colCon = GetField(tSd, sd, "colliderCollisionConstraint");
+                IList magicaColliders = colCon != null
+                    ? GetField(colCon.GetType(), colCon, "colliderList") as IList : null;
+                object colList = BuildMagicaColliderList(magicaColliders, r, colMap);
+
+                bool madeAny = false;
+                for (int k = 0; k < roots.Count; k++)
+                {
+                    Transform rb = roots[k] as Transform;
+                    if (rb == null || claimed.Contains(rb)) continue;
+
+                    Component db = (Component)rb.gameObject.AddComponent(tDB);
+                    SetEnumField(tDB, db, "m_UpdateMode", 0);
+                    SetField(tDB, db, "m_Root", rb);
+                    SetField(tDB, db, "m_Damping", Mathf.Clamp01(damping));
+                    // Magica has one "restoration stiffness"; DynamicBone splits the same idea
+                    // across elasticity (pull back to rest) and stiffness (resist bending).
+                    SetField(tDB, db, "m_Elasticity", Mathf.Clamp01(stiffness));
+                    SetField(tDB, db, "m_Stiffness", Mathf.Clamp01(stiffness * 0.5f));
+                    SetField(tDB, db, "m_Inert", inert);
+                    SetField(tDB, db, "m_Radius", Mathf.Max(0f, radius));
+
+                    // Magica's gravity is an authored 0..20 scalar along gravityDirection, not
+                    // an acceleration, so it is scaled by the chain's own bone length to stay
+                    // proportional on models of any size.
+                    float boneLen = AverageBoneLength(rb);
+                    Vector3 g = gravityDir.sqrMagnitude > 1e-6f ? gravityDir.normalized : Vector3.down;
+                    SetField(tDB, db, "m_Gravity", g * (Mathf.Clamp(gravity, 0f, 20f) / 10f) * boneLen * 0.5f);
+                    SetField(tDB, db, "m_Force", Vector3.zero);
+                    SetEnumField(tDB, db, "m_FreezeAxis", 0);
+                    if (colList != null) SetField(tDB, db, "m_Colliders", colList);
+
+                    ClaimSubtree(rb, claimed);
+                    r.fromMagicaCloth++;
+                    madeAny = true;
+                }
+                if (madeAny) spent.Add(mc);
+            }
+
+            // Retire the sources we replaced so both cannot drive the same bones.
+            for (int i = 0; i < spent.Count; i++)
+                if (spent[i] != null) UnityEngine.Object.DestroyImmediate(spent[i]);
+
+            if (r.fromMagicaCloth > 0)
+                r.notes.Add("Converted " + r.fromMagicaCloth + " Magica Cloth chain(s) to DynamicBone.");
+            if (meshCloth > 0)
+                r.notes.Add(meshCloth + " Magica MeshCloth setup(s) skipped - those simulate mesh " +
+                            "vertices, which DynamicBone cannot represent.");
+        }
+
+        static object BuildMagicaColliderList(IList magicaColliders, Result r,
+                                              Dictionary<Component, Component> map)
+        {
+            if (tDBColBase == null) return null;
+            Type listType = typeof(List<>).MakeGenericType(tDBColBase);
+            IList outList = (IList)Activator.CreateInstance(listType);
+            if (magicaColliders == null) return outList;
+
+            for (int i = 0; i < magicaColliders.Count; i++)
+            {
+                Component mcc = magicaColliders[i] as Component;
+                if (mcc == null) continue;
+                Component dbc;
+                if (!map.TryGetValue(mcc, out dbc))
+                {
+                    dbc = MakeMagicaCollider(mcc);
+                    map[mcc] = dbc;
+                    if (dbc != null) r.colliders++;
+                }
+                if (dbc != null) outList.Add(dbc);
+            }
+            return outList;
+        }
+
+        /// <summary>
+        /// Magica packs collider dimensions into a single protected Vector3 "size": a sphere uses
+        /// x as its radius, a capsule uses (startRadius, endRadius, length).
+        /// </summary>
+        static Component MakeMagicaCollider(Component mcc)
+        {
+            if (tDBCol == null) return null;
+            Type t = mcc.GetType();
+
+            Vector3 center = (Vector3)(GetField(t, mcc, "center") ?? Vector3.zero);
+            Vector3 size = Vector3.zero;
+            MethodInfo getSize = t.GetMethod("GetSize", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            if (getSize != null)
+            {
+                try { object v = getSize.Invoke(mcc, null); if (v is Vector3) size = (Vector3)v; }
+                catch { }
+            }
+            if (size == Vector3.zero)
+            {
+                object sv = GetField(t, mcc, "size");
+                if (sv is Vector3) size = (Vector3)sv;
+            }
+
+            bool isCapsule = t.Name.IndexOf("Capsule", StringComparison.OrdinalIgnoreCase) >= 0;
+            Component db = (Component)mcc.gameObject.AddComponent(tDBCol);
+            SetField(tDBColBase, db, "m_Center", center);
+            SetEnumField(tDBColBase, db, "m_Bound", 0);   // Outside
+
+            if (isCapsule)
+            {
+                float startR = size.x;
+                float endR = GetBool(t, mcc, "radiusSeparation", false) ? size.y : size.x;
+                float length = size.z;
+                float radius = Mathf.Max(startR, endR);
+                SetField(tDBCol, db, "m_Radius", radius);
+                // DynamicBone measures a capsule end to end, caps included.
+                SetField(tDBCol, db, "m_Height", Mathf.Max(length + radius * 2f, radius * 2f));
+                SetEnumField(tDBColBase, db, "m_Direction", GetEnumInt(t, mcc, "direction", 1));
+            }
+            else
+            {
+                SetField(tDBCol, db, "m_Radius", size.x);
+                SetField(tDBCol, db, "m_Height", 0f);
+                SetEnumField(tDBColBase, db, "m_Direction", 1);
+            }
+            return db;
+        }
+
+        static float CurveValue(object curveSerializeData, float fallback)
+        {
+            if (curveSerializeData == null) return fallback;
+            if (curveSerializeData is float) return (float)curveSerializeData;
+            object v = GetField(curveSerializeData.GetType(), curveSerializeData, "value");
+            return v is float ? (float)v : fallback;
+        }
+
+        /// <summary>Magica stores directions as Unity.Mathematics.float3, not Vector3.</summary>
+        static Vector3 Float3ToVector3(object f3, Vector3 fallback)
+        {
+            if (f3 == null) return fallback;
+            if (f3 is Vector3) return (Vector3)f3;
+            Type t = f3.GetType();
+            object x = GetField(t, f3, "x"), y = GetField(t, f3, "y"), z = GetField(t, f3, "z");
+            if (x is float && y is float && z is float) return new Vector3((float)x, (float)y, (float)z);
+            return fallback;
+        }
+
+        static object GetProp(object o, string name)
+        {
+            if (o == null) return null;
+            PropertyInfo pi = o.GetType().GetProperty(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            if (pi == null) return null;
+            try { return pi.GetValue(o, null); }
+            catch { return null; }
         }
 
         // ------------------------------------------------------------------ heuristic fallback
