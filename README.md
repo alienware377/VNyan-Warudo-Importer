@@ -253,11 +253,18 @@ Unity editor instead.
 
 ### From inside VNyan — **Export .vsfavatar**
 
-Analyze a model, then press **Export .vsfavatar**. The first time it asks for a Unity project
-to build in; after that it just asks where to save. It copies the converter into that project,
-runs Unity headlessly, and reports back in the log when the file is ready. The result is an
-ordinary `.vsfavatar` that VNyan loads with its normal **Load Avatar** button — no plugin
-needed on the machine that uses it.
+Analyze a model, then press **Export .vsfavatar**. It copies the converter into a Unity project
+of your choosing, runs Unity headlessly, and reports back in the log when the file is ready. The
+result is an ordinary `.vsfavatar` that VNyan loads with its normal **Load Avatar** button — no
+plugin needed on the machine that uses it.
+
+The first time it asks two things and remembers both:
+
+1. **Where `UnityToolset\Assets\WarudoConvert` is** — the converter sources, which ship in the
+   release zip next to the installers.
+2. **Which Unity project to build in.**
+
+After that it only asks where to save.
 
 Two things the project must satisfy:
 
