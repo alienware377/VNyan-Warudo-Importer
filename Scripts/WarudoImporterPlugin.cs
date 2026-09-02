@@ -87,9 +87,18 @@ namespace WarudoImporter
             DontDestroyOnLoad(holder);
             stagingHolder = holder.transform;
 
+            // Must happen before any avatar bundle is loaded: components whose assembly is not
+            // yet in the domain deserialize as dead scripts and lose the creator's tuning for
+            // good. Doing it here, at startup, covers every later import.
+            DynamicBoneConvert.PreloadPhysicsAssemblies();
+
             LoadSettings();
             SetupWindow();
             Log("Ready. VNyan loader hook: " + (VNyanBridge.Available ? "available" : "NOT AVAILABLE"));
+            Log("Physics assemblies present: " + DynamicBoneConvert.DescribePhysicsAssemblies());
+            Log("uMod relink: " + (UModRelink.Available
+                ? "available - " + UModRelink.Describe()
+                : "unavailable (" + (UModRelink.LastError ?? "?") + ")"));
             if (!VNyanBridge.Available) Log(VNyanBridge.Diagnose());
         }
 
@@ -179,6 +188,7 @@ namespace WarudoImporter
             loaded = WarudoBundle.Load(container.bundlePath);
             if (!loaded.Ok) { Log("AssetBundle: " + loaded.error); Flush(); return; }
             Log("Loaded asset: " + loaded.assetName);
+            Log(WarudoBundle.DescribeAssets(loaded.bundle));
 
             template = Instantiate(loaded.prefab);
             template.name = container.DisplayName;
@@ -190,13 +200,30 @@ namespace WarudoImporter
             // The bundle container can go now; the assets it produced stay alive because the
             // instantiated copy references them.
             WarudoBundle.Release(loaded);
+
+            // Rebuild the mod's real components from uMod's link data before anything inspects
+            // the avatar. Everything downstream - physics conversion, native Magica Cloth, VRM
+            // spring bones - depends on those components existing, and they do not until this
+            // runs. No-ops when the uMod runtime is not on this machine.
+            List<string> relinkNotes = new List<string>();
+            int revived = UModRelink.Relink(template, relinkNotes);
+            for (int i = 0; i < relinkNotes.Count; i++) Log(relinkNotes[i]);
+            if (revived > 0)
+                Log("uMod relink: rebuilt " + revived + " original component(s) with the creator's " +
+                    "authored values (" + UModRelink.Source + ").");
+
             Log(WarudoBundle.Describe(template));
+            Log(WarudoBundle.DescribeComponents(template));
 
             prepOptions.title = container.DisplayName;
             prepOptions.author = container.author;
             prepOptions.version = container.modVersion;
             prepOptions.thumbnail = coverTex;
             prepOptions.boneOverrides = boneOverrides;
+            prepOptions.modBlendShapeAvatar = loaded.blendShapeAvatar;
+            if (loaded.blendShapeAvatar != null)
+                Log("Mod ships its own expression set: " +
+                    VrmReflect.ClipCount(loaded.blendShapeAvatar) + " authored clips.");
 
             prep = AvatarPrep.Prepare(template, prepOptions);
             Log(prep.Summary());
@@ -509,6 +536,9 @@ namespace WarudoImporter
                 genOptions.includeMisc = GetBool(s, "catMisc", true);
                 genOptions.scale = GetFloat(s, "physScale", 1f);
                 convertDynBone = GetBool(s, "convertDynBone", true);
+                // Optional: a Warudo install or Creator SDK folder to borrow the uMod runtime
+                // from. Not shipped with the plugin - it is licensed middleware.
+                UModRelink.ConfiguredPath = Get(s, "umodPath", null);
             }
             catch (Exception e) { Debug.LogWarning(LOG + "loadSettings: " + e.Message); }
         }
@@ -530,6 +560,7 @@ namespace WarudoImporter
                 s["catMisc"] = genOptions.includeMisc ? "1" : "0";
                 s["physScale"] = genOptions.scale.ToString("0.###", CultureInfo.InvariantCulture);
                 s["convertDynBone"] = convertDynBone ? "1" : "0";
+                if (!string.IsNullOrEmpty(UModRelink.ConfiguredPath)) s["umodPath"] = UModRelink.ConfiguredPath;
                 VNyanInterface.VNyanInterface.VNyanSettings.saveSettings(SETTINGS_ID, s);
             }
             catch (Exception e) { Debug.LogWarning(LOG + "saveSettings: " + e.Message); }

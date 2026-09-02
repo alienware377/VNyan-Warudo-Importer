@@ -88,6 +88,32 @@ Poiyomi and other shaders travel compiled inside the bundle and are used as-is. 
 never swapped in, and no material is replaced with a stand-in. What the mod author shipped
 is what renders.
 
+### Why a mod's own physics arrives empty (and the one way to get it back)
+
+If you have ever wondered why an imported model's hair physics doesn't match what the creator
+built, this is why — and it is worth understanding before blaming the importer.
+
+A `.warudo` is built by the uMod pipeline, and uMod does **not** store mod components the way
+Unity normally does. Every MonoBehaviour on the model is replaced at build time by uMod's own
+`LinkBehaviourV2`, which records the original type name and its field values; the real
+component is reconstructed at load time by uMod's relinker. Warudo runs that relinker, so it
+sees the real thing. Any other host sees only dead placeholder scripts.
+
+That single fact explains all of it: Magica Cloth, VRM spring bones and VRChat PhysBones all
+arrive empty in VNyan, and no amount of having the right assemblies installed changes it,
+because the values were never inside a component to begin with.
+
+**Getting it back.** If a licensed copy of the uMod runtime (`UMod-Shared.dll`) is present,
+the importer runs the relinker itself and the model's original components come back with the
+creator's authored values — including Magica Cloth, which VNyan ships and can simulate
+natively. uMod is commercial middleware, so it is deliberately **not** bundled here. If you
+own the Warudo Creator SDK (or have Warudo installed) you already have a copy: put
+`UMod-Shared.dll` next to `WarudoImporter.dll` in the plugin folder, or point the plugin at
+your Warudo folder.
+
+Without it, nothing breaks — the importer falls back to detecting swaying bone chains and
+generating physics for them, which is the default behaviour described below.
+
 ### Expressions and Perfect Sync (ARKit)
 
 Two separate things happen here, and both matter.
@@ -97,6 +123,18 @@ Two separate things happen here, and both matter.
 look directions. The mapper recognises VRoid's `Fcl_*` names, VRChat viseme spellings
 (`vrc.v_aa`), Japanese kana (`あいうえお`), and `_L`/`Left` suffix variants, so most models
 land on the right clips without any manual work.
+
+**The mod's own expression set wins.** Many mods ship a complete authored `BlendShapeAvatar`
+inside the bundle. Unlike components, those load fine, so when one is present it is used as-is
+and the importer only fills in what it does not already define. Authored clips carry binary
+flags, material bindings and multi-mesh bindings that cannot be recovered by reading mesh
+names, so replacing them with reconstructions would be a downgrade.
+
+**Every blendshape is exposed.** Beyond the VRM presets and ARKit, every remaining shape on
+the meshes gets its own named clip, so custom expressions and toggles are reachable from
+VNyan's expression system and node graph. A clip binds **every** mesh carrying that shape —
+outfits routinely duplicate the body's shapes across several meshes, and binding only the
+first would move the body while the clothes stayed put.
 
 **Perfect Sync.** If the model carries the 52 ARKit shapes, the importer creates a blendshape
 clip for each one so face tracking can actually reach them. This is not optional and it is

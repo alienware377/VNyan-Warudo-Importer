@@ -313,7 +313,12 @@ namespace WarudoImporter
             Dictionary<string, string> canonical = new Dictionary<string, string>();
             for (int i = 0; i < ArKit52.Length; i++) canonical[Normalize(ArKit52[i])] = ArKit52[i];
 
-            HashSet<string> emitted = new HashSet<string>(StringComparer.Ordinal);
+            // Gather EVERY mesh carrying each ARKit shape before building clips. Outfits
+            // routinely duplicate the face/body shapes across several meshes, and a clip that
+            // binds only the first one moves the body while the clothes stay put.
+            Dictionary<string, List<ShapeRef>> byNorm = new Dictionary<string, List<ShapeRef>>(StringComparer.Ordinal);
+            Dictionary<string, string> spellingOf = new Dictionary<string, string>(StringComparer.Ordinal);
+
             SkinnedMeshRenderer[] smrs = avatarRoot.GetComponentsInChildren<SkinnedMeshRenderer>(true);
             for (int r = 0; r < smrs.Length; r++)
             {
@@ -329,31 +334,138 @@ namespace WarudoImporter
                     string norm = Normalize(bare);
                     if (!canonical.ContainsKey(norm)) continue;      // not an ARKit shape
 
-                    // Names to expose this shape under: the mesh's own spelling, the canonical
-                    // ARKit spelling, and the lower-cased form of each.
-                    List<string> names = new List<string>();
-                    AddName(names, bare);
-                    AddName(names, canonical[norm]);
-                    AddName(names, bare.ToLowerInvariant());
-                    AddName(names, canonical[norm].ToLowerInvariant());
-
-                    for (int n = 0; n < names.Count; n++)
+                    List<ShapeRef> list;
+                    if (!byNorm.TryGetValue(norm, out list))
                     {
-                        if (!emitted.Add(names[n])) continue;        // first mesh wins a given name
-                        ClipPlan p = new ClipPlan();
-                        p.preset = VrmPreset.Unknown;
-                        p.presetName = null;
-                        p.customName = names[n];
-                        p.isBinary = false;
-                        p.shapes = new List<ShapeRef>();
-                        ShapeRef s = new ShapeRef();
-                        s.renderer = smr;
-                        s.index = i;
-                        s.name = raw;
-                        s.weight = 100f;
-                        p.shapes.Add(s);
-                        plans.Add(p);
+                        list = new List<ShapeRef>();
+                        byNorm[norm] = list;
+                        spellingOf[norm] = bare;                     // first spelling seen
                     }
+                    ShapeRef s = new ShapeRef();
+                    s.renderer = smr;
+                    s.index = i;
+                    s.name = raw;
+                    s.weight = 100f;
+                    list.Add(s);
+                }
+            }
+
+            HashSet<string> emitted = new HashSet<string>(StringComparer.Ordinal);
+            foreach (KeyValuePair<string, List<ShapeRef>> kv in byNorm)
+            {
+                string norm = kv.Key;
+                List<string> names = new List<string>();
+                AddName(names, spellingOf[norm]);
+                AddName(names, canonical[norm]);
+                AddName(names, spellingOf[norm].ToLowerInvariant());
+                AddName(names, canonical[norm].ToLowerInvariant());
+
+                for (int n = 0; n < names.Count; n++)
+                {
+                    if (!emitted.Add(names[n])) continue;
+                    ClipPlan p = new ClipPlan();
+                    p.preset = VrmPreset.Unknown;
+                    p.presetName = null;
+                    p.customName = names[n];
+                    p.isBinary = false;
+                    p.shapes = new List<ShapeRef>(kv.Value);         // every mesh with this shape
+                    plans.Add(p);
+                }
+            }
+            return plans;
+        }
+
+        /// <summary>
+        /// Plans a clip for EVERY mesh blendshape that no other clip already exposes.
+        ///
+        /// Without this, a shape the model author added - a custom expression, a toggle, a
+        /// prop-hiding shape - is invisible to the host even though it is right there on the
+        /// mesh, because the host reaches blendshapes through named clips. Anything already
+        /// covered by a preset or ARKit clip is skipped, so this only fills the gaps.
+        ///
+        /// <paramref name="alreadyPlanned"/> should be the preset + ARKit plans, whose shapes are
+        /// excluded. Names follow the same dual-spelling rule as the ARKit clips.
+        /// </summary>
+        public static List<ClipPlan> PlanAllRemaining(GameObject avatarRoot, List<ClipPlan> alreadyPlanned)
+        {
+            List<ClipPlan> plans = new List<ClipPlan>();
+            if (avatarRoot == null) return plans;
+
+            // Mesh shapes already driven by a planned clip, keyed by renderer + index.
+            HashSet<string> covered = new HashSet<string>(StringComparer.Ordinal);
+            HashSet<string> usedNames = new HashSet<string>(StringComparer.Ordinal);
+            if (alreadyPlanned != null)
+            {
+                foreach (ClipPlan p in alreadyPlanned)
+                {
+                    if (p == null) continue;
+                    if (!string.IsNullOrEmpty(p.customName)) usedNames.Add(p.customName);
+                    if (!string.IsNullOrEmpty(p.presetName)) usedNames.Add(p.presetName);
+                    if (p.shapes == null) continue;
+                    foreach (ShapeRef s in p.shapes)
+                        if (s != null && s.renderer != null)
+                            covered.Add(s.renderer.GetInstanceID() + "#" + s.index);
+                }
+            }
+
+            // Same grouping rule as the ARKit planner: one clip per NAME, bound to every mesh
+            // that carries that shape, so a body shape moves the outfit with it.
+            Dictionary<string, List<ShapeRef>> byName = new Dictionary<string, List<ShapeRef>>(StringComparer.Ordinal);
+            List<string> order = new List<string>();
+
+            SkinnedMeshRenderer[] smrs = avatarRoot.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            for (int r = 0; r < smrs.Length; r++)
+            {
+                SkinnedMeshRenderer smr = smrs[r];
+                if (smr == null || smr.sharedMesh == null) continue;
+                for (int i = 0; i < smr.sharedMesh.blendShapeCount; i++)
+                {
+                    if (covered.Contains(smr.GetInstanceID() + "#" + i)) continue;
+
+                    string raw = smr.sharedMesh.GetBlendShapeName(i);
+                    string bare = raw;
+                    int dot = bare.LastIndexOf('.');
+                    if (dot >= 0) bare = bare.Substring(dot + 1);
+                    if (string.IsNullOrEmpty(bare)) continue;
+
+                    List<ShapeRef> list;
+                    if (!byName.TryGetValue(bare, out list))
+                    {
+                        list = new List<ShapeRef>();
+                        byName[bare] = list;
+                        order.Add(bare);
+                    }
+                    ShapeRef s = new ShapeRef();
+                    s.renderer = smr;
+                    s.index = i;
+                    s.name = raw;
+                    s.weight = 100f;
+                    list.Add(s);
+                }
+            }
+
+            for (int o = 0; o < order.Count; o++)
+            {
+                string bare = order[o];
+                List<ShapeRef> shapes = byName[bare];
+
+                List<string> names = new List<string>();
+                AddName(names, bare);
+                AddName(names, bare.ToLowerInvariant());
+
+                for (int n = 0; n < names.Count; n++)
+                {
+                    // A name already taken by a preset/ARKit clip must not be redefined -
+                    // that would silently steal an expression the host relies on.
+                    if (!usedNames.Add(names[n])) continue;
+
+                    ClipPlan p = new ClipPlan();
+                    p.preset = VrmPreset.Unknown;
+                    p.presetName = null;
+                    p.customName = names[n];
+                    p.isBinary = false;
+                    p.shapes = new List<ShapeRef>(shapes);
+                    plans.Add(p);
                 }
             }
             return plans;
