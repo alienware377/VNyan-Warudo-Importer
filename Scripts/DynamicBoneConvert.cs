@@ -35,6 +35,11 @@ namespace WarudoImporter
             public bool fromMagicaCloth = true;
             public bool heuristicFallback = true;   // synthesize for uncovered sway chains
             public GenOptions gen;                   // reused sway-chain detection knobs
+            /// <summary>
+            /// Bones a restored native simulation (Magica Cloth, VRM spring bones) already
+            /// drives. Converting these too would move them twice.
+            /// </summary>
+            public HashSet<Transform> preClaimed;
         }
 
         public class Result
@@ -143,6 +148,12 @@ namespace WarudoImporter
             // Bones already owned by a DynamicBone, so later sources / the heuristic don't stack a
             // second simulation on them.
             HashSet<Transform> claimed = new HashSet<Transform>();
+            if (opt.preClaimed != null)
+            {
+                foreach (Transform t in opt.preClaimed) claimed.Add(t);
+                if (opt.preClaimed.Count > 0)
+                    r.notes.Add("Left " + opt.preClaimed.Count + " bone(s) to the mod's own physics.");
+            }
 
             // Shared collider cache so many chains reference one DynamicBoneCollider instance.
             Dictionary<Component, Component> pbColMap = new Dictionary<Component, Component>();

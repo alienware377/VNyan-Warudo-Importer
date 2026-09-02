@@ -24,16 +24,16 @@ namespace WarudoImporter.EditorTools
     /// </summary>
     public class WarudoConvertWindow : EditorWindow
     {
-        string warudoPath = "";
-        string outputDir = "";
+        internal string warudoPath = "";
+        internal string outputDir = "";
         Vector2 scroll;
         string log = "";
-        GameObject staged;
+        internal GameObject staged;
 
-        bool stripAnimators = true;
-        bool disableConstraints = true;
-        bool writePhysBonesJson = true;
-        bool reencodeTextures = true;
+        internal bool stripAnimators = true;
+        internal bool disableConstraints = true;
+        internal bool writePhysBonesJson = true;
+        internal bool reencodeTextures = true;
 
         [MenuItem("Warudo/Convert .warudo to .vsfavatar")]
         public static void Open()
@@ -97,11 +97,11 @@ namespace WarudoImporter.EditorTools
             EditorGUILayout.EndScrollView();
         }
 
-        void L(string s) { log += s + "\n"; Debug.Log("[WarudoConvert] " + s); Repaint(); }
+        internal void L(string s) { log += s + "\n"; Debug.Log("[WarudoConvert] " + s); Repaint(); }
 
         // ------------------------------------------------------------------ stage
 
-        void Stage()
+        internal void Stage()
         {
             log = "";
             try
@@ -117,6 +117,14 @@ namespace WarudoImporter.EditorTools
                 inst.name = c.DisplayName;
                 WarudoBundle.Release(res);
                 L(WarudoBundle.Describe(inst));
+
+                // Put back the components uMod stripped out. This reads the mod's own data
+                // straight from the bundle, so the exported .vsfavatar carries the creator's
+                // real Magica Cloth / spring bones / PhysBones instead of nothing at all.
+                // In the editor the placeholder scripts are dead (the editor binds bundle
+                // scripts by GUID), which is exactly why this has to come from the file.
+                ModRestore.Result restore = ModRestore.Restore(inst, c.bundlePath);
+                for (int i = 0; i < restore.notes.Count; i++) L(restore.notes[i]);
 
                 string projDir = "Assets/WarudoImported/" + Sanitize(c.DisplayName);
                 EnsureFolder(projDir);
@@ -343,13 +351,21 @@ namespace WarudoImporter.EditorTools
 
         // ------------------------------------------------------------------ export
 
-        void Export()
+        internal void Export()
         {
             try
             {
                 string projDir = "Assets/WarudoImported/" + Sanitize(staged.name);
                 EnsureFolder(projDir);
                 string prefabPath = projDir + "/" + Sanitize(staged.name) + ".prefab";
+
+                // Unity refuses to save a prefab that still has missing scripts, and a .warudo
+                // is full of them: uMod's placeholders bind by GUID in the editor, so they are
+                // always dead here even though their data has already been read back.
+                int stripped = 0;
+                foreach (Transform t in staged.GetComponentsInChildren<Transform>(true))
+                    stripped += GameObjectUtility.RemoveMonoBehavioursWithMissingScript(t.gameObject);
+                if (stripped > 0) L("Removed " + stripped + " dead placeholder script(s) so the prefab can be saved.");
 #if UNITY_2018_3_OR_NEWER
                 GameObject prefab = PrefabUtility.SaveAsPrefabAsset(staged, prefabPath);
 #else
