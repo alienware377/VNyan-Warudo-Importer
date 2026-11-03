@@ -29,7 +29,7 @@ public static class WarudoImporterBuild
         // Starter prefab carries the plugin component, pointed at the window prefab so the
         // window is pulled into the bundle as a dependency.
         // VNyan loads the bundle's addressable "vnyanitem"; the root name "VNyanTemp"
-        // matches the official SDK output. Both are load-bearing.
+        // matches the official SDK output. Neither can change.
         GameObject go = new GameObject("VNyanTemp");
         WarudoImporter.WarudoImporterPlugin plugin = go.AddComponent<WarudoImporter.WarudoImporterPlugin>();
         plugin.windowPrefab = windowAsset;
@@ -163,7 +163,7 @@ public static class WarudoImporterBuild
         // ---- options -----------------------------------------------------
         float y = coverY + coverS + 8f;            // 188
 
-        MakeHeader(R, "Hdr_Options", "— Options —", y);
+        MakeHeader(R, "Hdr_Options", "Options", y);
         y += 22f;
 
         GameObject t1 = MakeToggle(R, "Toggle_StripAnimators", "Strip nested Animators", CX, y, 320f, 22f, true);
@@ -186,7 +186,7 @@ public static class WarudoImporterBuild
         y += 36f;                                   // row pitch (32) + a little air
 
         // ---- sway chains -------------------------------------------------
-        GameObject hdrChains = MakeHeader(R, "Hdr_Chains", "— Sway chains —", y);
+        GameObject hdrChains = MakeHeader(R, "Hdr_Chains", "Sway chains", y);
         MakeHelp(hdrChains, "Chains");
         y += 22f;
 
@@ -209,7 +209,7 @@ public static class WarudoImporterBuild
         y += 64f + 6f;
 
         // ---- humanoid bones ----------------------------------------------
-        GameObject hdrBones = MakeHeader(R, "Hdr_Bones", "— Humanoid bones —", y);
+        GameObject hdrBones = MakeHeader(R, "Hdr_Bones", "Humanoid bones", y);
         MakeHelp(hdrBones, "Bones");
         y += 22f;
 

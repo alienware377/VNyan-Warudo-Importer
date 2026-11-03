@@ -86,11 +86,11 @@ $VnobjName = 'WarudoImporter.vnobj'
 $DestRel   = 'Items\Assemblies\WarudoImporter'
 $BuildFunc = 'WarudoImporterBuild.Build'
 
-# The two VRChat stub assemblies. The .rsp files in vrcstubs\ hardcode the
-# default C:\Program Files\VNyan path, which is exactly what this script must not
-# assume - so the compile line is rebuilt here against the VNyan the user picked.
+# The two VRChat stub assemblies. The .rsp files in vrcstubs\ hardcode
+# C:\Program Files\VNyan, which this script must not assume, so the compile
+# line is rebuilt here against the chosen VNyan folder.
 # Order matters: the PhysBone stub references VRC.Dynamics.dll, so it is second.
-# AssemblyVersion 1.0.0.0 comes from vrcstubs\AssemblyInfo.cs and is load-bearing:
+# AssemblyVersion 1.0.0.0 comes from vrcstubs\AssemblyInfo.cs and must not change:
 # avatar bundles reference these assemblies at exactly that version.
 $StubBuilds = @(
     @{

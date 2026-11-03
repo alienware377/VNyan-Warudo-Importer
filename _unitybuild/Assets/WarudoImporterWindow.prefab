@@ -2116,7 +2116,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 1
     m_VerticalOverflow: 1
     m_LineSpacing: 1
-  m_Text: "\u2014 Humanoid bones \u2014"
+  m_Text: Humanoid bones
 --- !u!1 &1564805855167834341
 GameObject:
   m_ObjectHideFlags: 0
@@ -2311,7 +2311,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 1
     m_VerticalOverflow: 1
     m_LineSpacing: 1
-  m_Text: "\u2014 Sway chains \u2014"
+  m_Text: Sway chains
 --- !u!1 &1772863423807284205
 GameObject:
   m_ObjectHideFlags: 0
@@ -10057,7 +10057,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 1
     m_VerticalOverflow: 1
     m_LineSpacing: 1
-  m_Text: "\u2014 Options \u2014"
+  m_Text: Options
 --- !u!1 &8741307079762537261
 GameObject:
   m_ObjectHideFlags: 0

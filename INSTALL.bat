@@ -1,9 +1,9 @@
 @echo off
 setlocal enableextensions
 REM ===========================================================================
-REM  Warudo Importer - installer for the DEFAULT VNyan location
-REM  (C:\Program Files\VNyan). If your VNyan lives somewhere else, use
-REM  INSTALL_PORTABLE.bat instead - it opens a folder picker.
+REM  Warudo Importer: installer for a VNyan in C:\Program Files\VNyan.
+REM  If your VNyan lives somewhere else, use INSTALL_PORTABLE.bat instead,
+REM  which opens a folder picker.
 REM
 REM  Copies the prebuilt files from dist\ :
 REM      WarudoImporter.dll                -> VNyan\Items\Assemblies\WarudoImporter\
@@ -45,7 +45,7 @@ set "STAGE=C:\VNyanInstallTemp"
 echo.
 echo ============================================================
 echo   Warudo Importer for VNyan
-echo   Installer (default location)
+echo   Installer (C:\Program Files\VNyan)
 echo ============================================================
 echo.
 

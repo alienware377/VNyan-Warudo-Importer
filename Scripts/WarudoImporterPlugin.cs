@@ -18,9 +18,9 @@ namespace WarudoImporter
     /// downstream (face tracking, expressions, hand gestures, chains, colliders, node graph) works
     /// exactly as it does for a native avatar.
     ///
-    /// Physics is deliberately not simulated here - VRChat PhysBone components inside a .warudo
-    /// are dead scripts outside VRChat, so instead we generate a physbones.json for the PhysBones
-    /// plugin, which already implements that simulation.
+    /// Physics: components stripped by uMod are rebuilt from the bundle's link data (Magica
+    /// Cloth 2 and VRM spring bones run natively, VRChat PhysBones are converted to
+    /// DynamicBone). A physbones.json export for the PhysBones plugin is also available.
     /// </summary>
     public class WarudoImporterPlugin : MonoBehaviour, VNyanInterface.IButtonClickedHandler
     {
@@ -199,7 +199,7 @@ namespace WarudoImporter
             template = Instantiate(loaded.prefab, stagingHolder, false);
             template.name = container.DisplayName;
             // Hidden via the parent, not via SetActive(false) on the object itself - see the
-            // comment in VNyanBridge.Load for why that distinction is load-bearing.
+            // comment in VNyanBridge.Load for why that distinction matters.
             template.SetActive(true);
             templateHandedOff = false;
             // The bundle container can go now; the assets it produced stay alive because the
@@ -312,8 +312,7 @@ namespace WarudoImporter
 
         /// <summary>
         /// Magica Cloth builds its simulation over the first frames after the avatar appears,
-        /// so the honest answer to "is the physics actually running?" is only available a
-        /// moment later. Reporting it beats asking the user to eyeball the hair.
+        /// so whether physics is actually running can only be reported a moment later.
         /// </summary>
         System.Collections.IEnumerator ReportPhysicsWhenReady()
         {
