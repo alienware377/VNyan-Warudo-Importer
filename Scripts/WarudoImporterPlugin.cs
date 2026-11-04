@@ -36,7 +36,7 @@ namespace WarudoImporter
         WarudoContainer container;
         WarudoBundle.Result loaded;
         GameObject template;              // what VNyan instantiates from
-        bool templateHandedOff;           // true once VNyan's cache owns it - never destroy it then
+        bool templateHandedOff;           // true once VNyan's cache owns it (never destroy it then)
         Transform stagingHolder;          // inactive, persistent parent that hides templates pre-import
         AvatarPrep.Result prep;
         ModRestore.Result restore;
@@ -100,7 +100,7 @@ namespace WarudoImporter
             Log("Ready. VNyan loader hook: " + (VNyanBridge.Available ? "available" : "NOT AVAILABLE"));
             Log("Physics assemblies present: " + DynamicBoneConvert.DescribePhysicsAssemblies());
             Log("uMod relink: " + (UModRelink.Available
-                ? "available - " + UModRelink.Describe()
+                ? "available: " + UModRelink.Describe()
                 : "unavailable (" + (UModRelink.LastError ?? "?") + ")"));
             if (!VNyanBridge.Available) Log(VNyanBridge.Diagnose());
         }
@@ -198,7 +198,7 @@ namespace WarudoImporter
             // run its Awake before we have had a chance to fix anything up.
             template = Instantiate(loaded.prefab, stagingHolder, false);
             template.name = container.DisplayName;
-            // Hidden via the parent, not via SetActive(false) on the object itself - see the
+            // Hidden via the parent, not via SetActive(false) on the object itself. See the
             // comment in VNyanBridge.Load for why that distinction matters.
             template.SetActive(true);
             templateHandedOff = false;
@@ -207,8 +207,8 @@ namespace WarudoImporter
             WarudoBundle.Release(loaded);
 
             // Rebuild the mod's real components from uMod's link data before anything inspects
-            // the avatar. Everything downstream - physics conversion, native Magica Cloth, VRM
-            // spring bones - depends on those components existing, and they do not until this
+            // the avatar. Everything downstream (physics conversion, native Magica Cloth, VRM
+            // spring bones) depends on those components existing, and they do not until this
             // runs. No-ops when the uMod runtime is not on this machine.
             restore = ModRestore.Restore(template, container.bundlePath);
             for (int i = 0; i < restore.notes.Count; i++) Log(restore.notes[i]);
@@ -267,13 +267,13 @@ namespace WarudoImporter
             if (template == null) { Log("Analyze a .warudo file first."); Flush(); return; }
             if (prep == null || !prep.Ok)
             {
-                Log("Not importable yet - fix the errors above first.");
+                Log("Not importable yet. Fix the errors above first.");
                 Flush();
                 return;
             }
 
             // Convert the mod's bone physics to live DynamicBone components BEFORE handing the
-            // avatar over, so they self-simulate the moment VNyan instantiates it - the same way
+            // avatar over, so they self-simulate the moment VNyan instantiates it, the same way
             // Warudo converts VRC PhysBones to Dynamic Bones at load.
             if (convertDynBone)
             {
@@ -285,7 +285,7 @@ namespace WarudoImporter
                     if (restore != null)
                     {
                         // The mod's own Magica Cloth and spring bones are alive now, so those
-                        // chains are already simulated - converting them as well would fight.
+                        // chains are already simulated, and converting them as well would fight.
                         dopt.preClaimed = restore.nativelyDriven;
                         if (restore.HasNativeCloth) dopt.fromMagicaCloth = false;
                         if (restore.HasNativeSpringBones) dopt.fromSpringBone = false;
@@ -294,7 +294,7 @@ namespace WarudoImporter
                     for (int i = 0; i < dres.notes.Count; i++) Log(dres.notes[i]);
                     Log("DynamicBone: " + dres.Total + " chain(s), " + dres.colliders + " collider(s).");
                 }
-                else Log("DynamicBone type not found in this VNyan build - physics not converted.");
+                else Log("DynamicBone type not found in this VNyan build, physics not converted.");
             }
 
             string key = VNyanBridge.CacheKeyFor(selectedPath);
@@ -302,7 +302,7 @@ namespace WarudoImporter
             {
                 templateHandedOff = true;
                 Log("Handed to VNyan as \"" + Path.GetFileName(key) + "\".");
-                Log("VNyan's avatar cache is now held open for this session - it has to be, because " +
+                Log("VNyan's avatar cache is now held open for this session. It has to be, because " +
                     "that key is not a real file on disk.");
                 StartCoroutine(ReportPhysicsWhenReady());
             }
@@ -322,7 +322,7 @@ namespace WarudoImporter
             try { avatar = VNyanInterface.VNyanInterface.VNyanAvatar.getAvatarObject() as GameObject; }
             catch (Exception e) { Log("Could not read back the avatar: " + e.Message); }
 
-            if (avatar == null) { Log("Avatar not reachable yet - physics status unknown."); Flush(); yield break; }
+            if (avatar == null) { Log("Avatar not reachable yet, physics status unknown."); Flush(); yield break; }
             Log(ModRestore.DescribePhysicsState(avatar));
             Flush();
         }
@@ -409,7 +409,7 @@ namespace WarudoImporter
         void OnExportVsfAvatar()
         {
             if (exportJob != null && !exportJob.Done)
-            { Log("An export is already running - give it a moment."); Flush(); return; }
+            { Log("An export is already running. Give it a moment."); Flush(); return; }
 
             if (string.IsNullOrEmpty(selectedPath) || !File.Exists(selectedPath))
             { Log("Choose a .warudo file first."); Flush(); return; }
@@ -430,7 +430,7 @@ namespace WarudoImporter
             if (!VsfAvatarExport.IsUnityProject(unityProjectPath))
             {
                 Log("Pick the Unity project to build in. It needs UniVRM and the shaders this mod " +
-                    "uses already installed - the Warudo SDK project is the natural choice.");
+                    "uses already installed. The Warudo SDK project is the natural choice.");
                 Flush();
                 string picked = NativeFileDialog.PickFolder("Unity project to build the .vsfavatar in", unityProjectPath);
                 if (string.IsNullOrEmpty(picked)) { Log("Cancelled."); Flush(); return; }
@@ -478,7 +478,7 @@ namespace WarudoImporter
             if (job.ExitCode == 0 && !string.IsNullOrEmpty(produced) && File.Exists(produced))
             {
                 Log("Wrote " + produced + " (" + (new FileInfo(produced).Length / (1024 * 1024)) + " MB). " +
-                    "Load it with VNyan's normal Load Avatar button - no plugin needed.");
+                    "Load it with VNyan's normal Load Avatar button, no plugin needed.");
             }
             else
             {
@@ -518,7 +518,7 @@ namespace WarudoImporter
 
         void ReleasePrevious()
         {
-            // A handed-off template is now VNyan's cache entry - AvatarCache.GetAvatarCache will
+            // A handed-off template is now VNyan's cache entry: AvatarCache.GetAvatarCache will
             // return it again on every future reload of this avatar, so it must never be
             // destroyed. An analyzed-but-never-imported template is only ours, so drop it here
             // rather than leaking one every time the user re-analyzes.
@@ -599,7 +599,7 @@ namespace WarudoImporter
         // ----- bone mapping list -----
 
         /// <summary>
-        /// Only the 15 bones Unity actually requires get a row - listing all 55 turns the panel
+        /// Only the 15 bones Unity actually requires get a row. Listing all 55 turns the panel
         /// into a wall, and fingers are optional anyway.
         /// </summary>
         void RebuildBoneList()
@@ -610,7 +610,7 @@ namespace WarudoImporter
             {
                 AddRowLabel(boneContent, 0, prep != null && prep.animator != null && prep.animator.avatar != null &&
                                             prep.animator.avatar.isHuman
-                    ? "Model already has a humanoid rig - nothing to map."
+                    ? "Model already has a humanoid rig, nothing to map."
                     : "Analyze a model to see its bone mapping.");
                 return;
             }
@@ -741,7 +741,7 @@ namespace WarudoImporter
                 genOptions.scale = GetFloat(s, "physScale", 1f);
                 convertDynBone = GetBool(s, "convertDynBone", true);
                 // Optional: a Warudo install or Creator SDK folder to borrow the uMod runtime
-                // from. Not shipped with the plugin - it is licensed middleware.
+                // from. Not shipped with the plugin because it is licensed middleware.
                 UModRelink.ConfiguredPath = Get(s, "umodPath", null);
             }
             catch (Exception e) { Debug.LogWarning(LOG + "loadSettings: " + e.Message); }
@@ -1010,19 +1010,19 @@ namespace WarudoImporter
         void BuildTooltips()
         {
             Dictionary<string, string> tips = new Dictionary<string, string>();
-            tips["Browse"] = "Pick a .warudo file. It is a uMod container holding a Unity AssetBundle - " +
+            tips["Browse"] = "Pick a .warudo file. It is a uMod container holding a Unity AssetBundle, and " +
                              "the model, materials and skeleton are read straight out of it.";
             tips["Analyze"] = "Unpacks and inspects the mod without touching your current avatar: rig type, " +
                               "meshes, blendshapes, shaders and which humanoid bones were recognised.";
             tips["Import"] = "Hands the prepared model to VNyan's own avatar loader, so it behaves exactly " +
                              "like a .vsfavatar: tracking, expressions, gestures, chains and node graph all apply.";
             tips["ExportPhys"] = "Warudo models carry VRChat PhysBone components that do nothing outside " +
-                                 "VRChat. This writes a physbones.json for the PhysBones plugin instead - " +
-                                 "open it and press Reload.";
+                                 "VRChat. This writes a physbones.json for the PhysBones plugin instead. " +
+                                 "Open it and press Reload.";
             tips["ConvertDynBone"] = "Convert the mod's physics into VNyan's built-in DynamicBone at import, " +
                                      "the way Warudo does. Revives VRChat PhysBones (via the bundled VRC " +
-                                     "stubs) and VRM SpringBones and turns them into live Dynamic Bones - " +
-                                     "no separate plugin needed. Leave the PhysBones-JSON export for when " +
+                                     "stubs) and VRM SpringBones and turns them into live Dynamic Bones, " +
+                                     "with no separate plugin needed. Leave the PhysBones-JSON export for when " +
                                      "you'd rather drive it through the PhysBones plugin instead.";
             tips["StripAnimators"] = "Removes Animators on child objects. They were authored for another host " +
                                      "and would fight VNyan's tracking on the root Animator.";
@@ -1034,7 +1034,7 @@ namespace WarudoImporter
                                 "lower it for chibi proportions.";
             tips["Chains"] = "Bones detected as swaying (hair, skirt, tail, ears, breast, misc). Untick anything " +
                              "you would rather keep rigid.";
-            tips["Bones"] = "The 15 bones Unity requires for a humanoid rig. Red means auto-detection failed - " +
+            tips["Bones"] = "The 15 bones Unity requires for a humanoid rig. Red means auto-detection failed: " +
                             "use Pick to assign it, then Analyze again.";
             AddTooltips(tips);
         }

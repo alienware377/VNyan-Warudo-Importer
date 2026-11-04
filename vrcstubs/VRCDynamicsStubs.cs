@@ -1,12 +1,12 @@
 // Stub of VRChat's VRC.Dynamics assembly.
 //
 // A .warudo / VRChat avatar bundle carries VRCPhysBone(Collider) components as MonoBehaviours
-// whose serialized data is unreadable in any host that lacks the VRChat SDK - the scripts load
+// whose serialized data is unreadable in any host that lacks the VRChat SDK: the scripts load
 // as dead "missing script" placeholders and their tuning is lost. This assembly is a data-only
 // re-declaration of those classes with the EXACT assembly name, type names and serialized field
 // names/types (extracted from VRChat Avatars SDK 3.10.4), so Unity's AssetBundle deserializer
 // binds the bundle's components to these classes and repopulates every field. Nothing here
-// simulates - the Warudo Importer reads these revived fields and builds native DynamicBone
+// simulates. The Warudo Importer reads these revived fields and builds native DynamicBone
 // components from them, exactly the way Warudo converts VRCPhysBone -> Dynamic Bone at load.
 //
 // This file is compiled TWICE, into two separate assemblies whose names must match what the

@@ -29,8 +29,8 @@ if exist "%DLL%" del /Q "%DLL%"
 set "RC=%ERRORLEVEL%"
 popd
 if not "%RC%"=="0" ( echo [!] csc.exe exited with %RC%. & goto :fail )
-if not exist "%DLL%" ( echo [!] DLL compile failed - build\WarudoImporter.dll was not produced. & goto :fail )
-echo     ok - build\WarudoImporter.dll
+if not exist "%DLL%" ( echo [!] DLL compile failed: build\WarudoImporter.dll was not produced. & goto :fail )
+echo     ok: build\WarudoImporter.dll
 
 echo [2/4] Copying the DLL into the Unity project ...
 if not exist "%PLUGINS%" mkdir "%PLUGINS%"
@@ -39,13 +39,13 @@ if errorlevel 1 ( echo [!] Could not copy the DLL into "%PLUGINS%". & goto :fail
 REM The plugin's own dependencies must sit beside it or Unity cannot load the type.
 if not exist "%PLUGINS%\VNyanInterface.dll"  copy /Y "%VNI%" "%PLUGINS%\" >nul
 if not exist "%PLUGINS%\Newtonsoft.Json.dll" copy /Y "%MGD%\Newtonsoft.Json.dll" "%PLUGINS%\" >nul
-echo     ok - Assets\Plugins updated
+echo     ok: Assets\Plugins updated
 
 echo [3/4] Building .vnobj via Unity batchmode (this can take a few minutes) ...
 if exist "%VNOBJ%" del /Q "%VNOBJ%"
 "%UNITY%" -batchmode -quit -nographics -projectPath "%UBUILD%" -executeMethod WarudoImporterBuild.Build -logFile "%UBUILD%\build.log"
 if not exist "%VNOBJ%" ( echo [!] .vnobj build failed. See "%UBUILD%\build.log". & goto :fail )
-echo     ok - WarudoImporter.vnobj
+echo     ok: WarudoImporter.vnobj
 
 echo [4/4] Staging dist\ ...
 if not exist "%PROJ%dist" mkdir "%PROJ%dist"

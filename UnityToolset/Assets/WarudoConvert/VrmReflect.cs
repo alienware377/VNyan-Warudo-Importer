@@ -12,7 +12,7 @@ namespace WarudoImporter
     /// Two reasons this is not a normal reference: the plugin must compile without UniVRM in the
     /// project at all (so the same sources build for the VNyan runtime plugin and the editor
     /// converter), and the host decides which UniVRM version is loaded. VNyan ships the classic
-    /// 0.x line, where every field we need is a plain public field - verified against its
+    /// 0.x line, where every field we need is a plain public field. Checked against its
     /// VRM.dll: VRMMeta.Meta, VRMMetaObject.{Title,Author,Thumbnail,...},
     /// VRMBlendShapeProxy.BlendShapeAvatar, BlendShapeAvatar.Clips,
     /// BlendShapeClip.{BlendShapeName,Preset,Values,IsBinary},
@@ -258,7 +258,7 @@ namespace WarudoImporter
             {
                 string presetName = presetOrder[i];
                 if (presetName == "value__") continue;
-                // The mod already defines this expression - leave the author's version alone.
+                // The mod already defines this expression, so leave the author's version alone.
                 if (existingPresets.Contains(presetName) || existingNames.Contains(presetName)) continue;
 
                 ClipPlan plan;
@@ -298,7 +298,7 @@ namespace WarudoImporter
             }
 
             // Perfect Sync / ARKit clips. These carry preset Unknown and are found by NAME, which
-            // is the only way the host can reach them - it builds its lookup key with
+            // is the only way the host can reach them: it builds its lookup key with
             // BlendShapeKey.CreateUnknown(name) and never inspects mesh blendshapes.
             for (int c = 0; c < custom.Count; c++)
             {

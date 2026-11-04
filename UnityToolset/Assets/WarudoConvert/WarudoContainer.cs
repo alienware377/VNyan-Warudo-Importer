@@ -10,10 +10,10 @@ namespace WarudoImporter
     /// <summary>
     /// A .warudo file is a uMod container: a 12-byte header ("UMOD" + 8 bytes) followed by a
     /// plain ZIP archive. The ZIP holds:
-    ///     modinfo.dat        - .NET BinaryWriter stream: magic, timestamp, ints, strings, cover JPEG
-    ///     sharedassets.bin   - a stock UnityFS AssetBundle (built by the mod's Unity version)
-    ///     sharedassets.meta  - newline-free list of the asset paths inside the bundle
-    /// Verified against Tsukki_Fairy v1.warudo (uMod 2.9.0, Unity 2021.3.18f1).
+    ///     modinfo.dat:       .NET BinaryWriter stream: magic, timestamp, ints, strings, cover JPEG
+    ///     sharedassets.bin:  a stock UnityFS AssetBundle (built by the mod's Unity version)
+    ///     sharedassets.meta: newline-free list of the asset paths inside the bundle
+    /// Layout as written by uMod 2.9.0 (Unity 2021.3.18f1).
     /// </summary>
     public class WarudoContainer
     {
@@ -92,7 +92,7 @@ namespace WarudoImporter
             {
                 // ZipArchive resolves the central directory using offsets that are relative to the
                 // START of the archive, but it treats stream position 0 as that start. Simply
-                // seeking past the 12-byte uMod header is not enough - every offset then lands 12
+                // seeking past the 12-byte uMod header is not enough: every offset then lands 12
                 // bytes early and it throws "Number of entries expected in End Of Central
                 // Directory does not correspond...". OffsetStream re-bases the file so position 0
                 // is the ZIP's first byte, which avoids copying the whole (often 300 MB+) archive.

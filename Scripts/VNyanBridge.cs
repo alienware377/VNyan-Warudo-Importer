@@ -9,7 +9,7 @@ namespace WarudoImporter
     /// <summary>
     /// Hands a prepared avatar to VNyan's own loader.
     ///
-    /// VNyanInterface has no "load this avatar" API - the only entry point is VNyan's internal
+    /// VNyanInterface has no "load this avatar" API. The only entry point is VNyan's internal
     /// UiManager. Its avatar coroutine (verified by reading the IL of UiManager.LoadVSFAvatar)
     /// runs in this order:
     ///
@@ -134,7 +134,7 @@ namespace WarudoImporter
 
         /// <summary>
         /// Seeds the cache and asks VNyan to load it. <paramref name="template"/> must be a
-        /// GameObject that stays alive and inactive - VNyan instantiates from it every time the
+        /// GameObject that stays alive and inactive: VNyan instantiates from it every time the
         /// avatar is (re)loaded, so it is a prefab stand-in, not the live avatar.
         /// </summary>
         public static bool Load(string cacheKey, GameObject template)
@@ -160,7 +160,7 @@ namespace WarudoImporter
             // inactive. A genuine .vsfavatar's cached object is a prefab ASSET (activeSelf true
             // by convention, not a live scene object at all), so VNyan never has to think about
             // this. Ours is a real scene GameObject that the caller hides by parking it under an
-            // inactive holder - so template.activeSelf must stay true, or every clone VNyan
+            // inactive holder, so template.activeSelf must stay true, or every clone VNyan
             // instantiates from this cache entry (now and on every future reload) is born
             // inactive and never renders, even though loading/binding otherwise succeeds.
             if (!template.activeSelf) template.SetActive(true);
@@ -171,7 +171,7 @@ namespace WarudoImporter
             if (template.transform.parent == null) UnityEngine.Object.DontDestroyOnLoad(template);
 
             // Without this the cache is skipped entirely and VNyan tries to read our key as a
-            // file. Left on for the rest of the session - see the class comment.
+            // file. Left on for the rest of the session (see the class comment).
             if (!EnableCache(cache))
             {
                 LastError = "VNyan's avatar cache could not be enabled (the 'isInUse' flag was not " +

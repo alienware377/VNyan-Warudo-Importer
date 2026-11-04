@@ -13,7 +13,7 @@ REM
 REM  Requirements on this PC:
 REM    * The full source tree (this folder, with Scripts\, _unitybuild\, dist\).
 REM    * Unity 2022.3.x installed (via Unity Hub is fine). Unity also supplies
-REM      the Roslyn C# compiler the sources need - the in-box .NET Framework
+REM      the Roslyn C# compiler the sources need; the in-box .NET Framework
 REM      csc.exe is C# 5 and cannot build them.
 REM
 REM  This .bat deliberately does NOT elevate itself. An elevated session cannot

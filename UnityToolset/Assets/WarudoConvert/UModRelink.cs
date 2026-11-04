@@ -16,15 +16,15 @@ namespace WarudoImporter
     /// the authored field values, and the real component is reconstructed at load time by
     /// uMod's relinker. A host that never runs that relinker sees only dead placeholders, which
     /// is why Magica Cloth, VRM spring bones and VRChat PhysBones all arrive empty no matter
-    /// which assemblies are present - their data was never in a component to begin with.
+    /// which assemblies are present: their data was never in a component to begin with.
     ///
     /// Verified in the bundles themselves: they contain
     /// "PPtr&lt;$LinkBehaviourV2&gt;", "PPtr&lt;$LinkScriptableObjectV2&gt;" and
     /// "UMod.Shared.Linker.TypeHandler" from assembly UMod-Shared.
     ///
-    /// uMod is commercial middleware and is deliberately NOT redistributed with this plugin.
-    /// It is used only if the machine already has a licensed copy - the Warudo Creator SDK
-    /// ships one - and everything degrades to the reconstructed physics path without it.
+    /// uMod is commercial middleware and is deliberately not redistributed with this plugin.
+    /// It is used only if the machine already has a licensed copy (the Warudo Creator SDK
+    /// ships one), and everything degrades to the reconstructed physics path without it.
     /// </summary>
     public static class UModRelink
     {
@@ -42,7 +42,7 @@ namespace WarudoImporter
         /// <summary>Where the uMod runtime might already exist on this machine.</summary>
         static IEnumerable<string> CandidatePaths()
         {
-            // 1. Beside the plugin - the user can drop their own copy in.
+            // 1. Beside the plugin, where a copy can be dropped in by hand.
             string pluginDir = null;
             try { pluginDir = Path.GetDirectoryName(typeof(UModRelink).Assembly.Location); }
             catch { }
@@ -141,7 +141,7 @@ namespace WarudoImporter
             s_preRelink = PickByGameObject(s_linker.GetMethods(ANY), "PreRelinkModObject");
             s_relink = PickByGameObject(s_linker.GetMethods(ANY), "RelinkModObject");
             if (s_relink == null)
-                LastError = "ModLinkerV2.RelinkModObject(GameObject) was not found - this uMod " +
+                LastError = "ModLinkerV2.RelinkModObject(GameObject) was not found. This uMod " +
                             "version differs from the one this was written against.";
         }
 
@@ -210,7 +210,7 @@ namespace WarudoImporter
             catch (Exception e) { if (notes != null) notes.Add("uMod InitializeHandlers: " + Unwrap(e).Message); }
 
             // The flags are RelinkModObject(go, isSceneLink, relinkDependencies) and
-            // PreRelinkModObject(go, relinkDependencies) - read from the parameter names on the
+            // PreRelinkModObject(go, relinkDependencies), read from the parameter names on the
             // loaded assembly. An imported avatar is a prefab instance, not a scene link, and its
             // dependencies do need relinking, so (false, true) is the correct call. The other
             // combinations stay as fallbacks in case a different uMod build reorders them; each
@@ -302,7 +302,7 @@ namespace WarudoImporter
 
         static bool s_hooksInstalled;
 
-        /// <summary>Which assembly defines this type - it is already loaded, so just report it.</summary>
+        /// <summary>Which assembly defines this type. It is already loaded, so just report it.</summary>
         static Assembly ResolveAssembly(Type type)
         {
             return type != null ? type.Assembly : null;

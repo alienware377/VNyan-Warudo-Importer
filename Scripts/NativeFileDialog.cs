@@ -138,7 +138,7 @@ namespace WarudoImporter
             [Out][MarshalAs(UnmanagedType.Interface)] out object item);
 
         /// <summary>
-        /// Folder picker. Windows only offers this through the COM dialog - the classic
+        /// Folder picker. Windows only offers this through the COM dialog, because the classic
         /// comdlg32 file dialog cannot select a directory.
         /// </summary>
         public static string PickFolder(string title, string initialDir)

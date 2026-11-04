@@ -10,9 +10,9 @@ namespace WarudoImporter
     ///
     /// A .warudo mod is just a Unity prefab: it has meshes, materials and a skeleton, but the
     /// Animator avatar is frequently Generic and there are no VRM components at all. VNyan's
-    /// avatar pipeline is VRM-shaped, so this class supplies the missing half - a humanoid
+    /// avatar pipeline is VRM-shaped, so this class supplies the missing half: a humanoid
     /// Avatar plus VRMMeta / VRMHumanoidDescription / VRMBlendShapeProxy / VRMFirstPerson /
-    /// VRMLookAtHead - without touching a single mesh or material (Poiyomi must survive intact).
+    /// VRMLookAtHead, without touching a single mesh or material (Poiyomi must survive intact).
     /// </summary>
     public static class AvatarPrep
     {
@@ -72,7 +72,7 @@ namespace WarudoImporter
                 if (arKitClips > 0)
                     sb.AppendLine("Perfect Sync: " + arKitClips + " ARKit clips created (face tracking will drive them).");
                 else if (perfectSync)
-                    sb.AppendLine("Perfect Sync shapes detected but NO clips were created - face tracking will not reach them.");
+                    sb.AppendLine("Perfect Sync shapes detected but no clips were created, so face tracking will not reach them.");
                 if (extraClips > 0)
                     sb.AppendLine("Other blendshapes exposed: " + extraClips + " clips (every remaining shape on the meshes).");
                 for (int i = 0; i < notes.Count; i++) sb.AppendLine("- " + notes[i]);
@@ -137,8 +137,8 @@ namespace WarudoImporter
                 r.arKitClips = arkit.Count;
             }
 
-            // Everything else the model author authored - custom expressions, toggles, shapes
-            // that match no known convention - gets a clip too, so nothing on the mesh is
+            // Everything else the model author authored (custom expressions, toggles, shapes
+            // that match no known convention) gets a clip too, so nothing on the mesh is
             // unreachable from the host's expression system or node graph.
             if (opt.exposeAllBlendShapes)
             {
@@ -167,7 +167,7 @@ namespace WarudoImporter
 
         /// <summary>
         /// Removes what would actively fight VNyan. Dead scripts (VRCPhysBone and friends) show up
-        /// as null components and cannot be removed at runtime - they are inert, so we only count
+        /// as null components and cannot be removed at runtime. They are inert, so we only count
         /// them for the report.
         /// </summary>
         static void CleanUp(GameObject root, Options opt, Result r)
@@ -177,7 +177,7 @@ namespace WarudoImporter
             for (int i = 0; i < all.Length; i++) if (all[i] == null) deadScripts++;
             if (deadScripts > 0)
                 r.notes.Add(deadScripts + " components belong to scripts this host does not have " +
-                            "(VRChat PhysBones etc). They are inert - use Export physbones.json for physics.");
+                            "(VRChat PhysBones etc). They are inert. Use Export physbones.json for physics.");
 
             if (opt.stripNestedAnimators)
             {

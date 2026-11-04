@@ -117,7 +117,7 @@ namespace WarudoImporter.Serialized
 
                 // The range coder carries five bytes of lookahead, so a stream that ends on
                 // its last useful byte can still ask for a few more. Past that the block is
-                // genuinely truncated and continuing would just decode noise.
+                // truly truncated and continuing would just decode noise.
                 if (++overrun > 8)
                     throw new InvalidOperationException("LZMA: input ended before the block was complete");
                 return 0;

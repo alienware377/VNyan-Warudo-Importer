@@ -14,14 +14,14 @@ namespace WarudoImporter
         public class Result
         {
             public AssetBundle bundle;
-            public GameObject prefab;      // asset inside the bundle - do NOT destroy
+            public GameObject prefab;      // asset inside the bundle, do not destroy
             public string assetName;
             public string error;
             public bool Ok { get { return prefab != null; } }
 
             /// <summary>
             /// The mod's own VRM data, when it ships any. These are ScriptableObjects, and unlike
-            /// the prefab's MonoBehaviours they deserialize fine as long as the host has UniVRM -
+            /// the prefab's MonoBehaviours they deserialize fine as long as the host has UniVRM,
             /// so a mod authored with a full expression set hands us the creator's actual clips,
             /// which are always better than anything reconstructed from mesh names.
             /// </summary>
@@ -177,7 +177,7 @@ namespace WarudoImporter
 
         /// <summary>
         /// Frees the container but keeps every loaded asset (mesh, material, compiled shader)
-        /// alive - exactly what we need, since the instantiated avatar references them.
+        /// alive, which is what we need since the instantiated avatar references them.
         /// </summary>
         public static void Release(Result r)
         {

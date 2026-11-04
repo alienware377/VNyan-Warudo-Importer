@@ -17,7 +17,7 @@ public static class WarudoImporterBuild
     {
         const string windowPrefabPath = "Assets/WarudoImporterWindow.prefab";
         // SaveAsPrefabAsset renames the saved root to match the FILE name, so the file itself has
-        // to be VNyanTemp.prefab - naming the in-scene GameObject is not enough. A different root
+        // to be VNyanTemp.prefab. Naming the in-scene GameObject is not enough. A different root
         // name makes VNyan log "The Object you want to instantiate is null" and the plugin button
         // never appears.
         const string starterPrefabPath = "Assets/VNyanTemp.prefab";

@@ -7,19 +7,19 @@ using UnityEngine;
 namespace WarudoImporter
 {
     /// <summary>
-    /// Converts an imported avatar's source bone-physics into VNyan's NATIVE DynamicBone
-    /// components - the same thing Warudo does when it turns VRC PhysBones into Dynamic Bones at
+    /// Converts an imported avatar's source bone-physics into VNyan's native DynamicBone
+    /// components, the same thing Warudo does when it turns VRC PhysBones into Dynamic Bones at
     /// load. Unlike the physbones.json path (which drives the separate VNyanPhysBones plugin),
     /// this produces live components that self-simulate with zero plugin dependency, because
     /// VNyan ships DynamicBone v1.3 compiled straight into Assembly-CSharp.
     ///
     /// Three sources, in priority order per bone (a bone already claimed by an earlier source is
     /// never double-driven):
-    ///   1. VRCPhysBone   - revived from the bundle by the shipped VRC stub assemblies, then
-    ///                      converted with the INVERSE of VRChat's own DynamicBone->PhysBone math
+    ///   1. VRCPhysBone:    revived from the bundle by the shipped VRC stub assemblies, then
+    ///                      converted with the inverse of VRChat's own DynamicBone->PhysBone math
     ///                      (extracted from VRC SDK 3.10.4 PhysBoneMigration).
-    ///   2. VRMSpringBone - already live in VNyan (it ships VRM.dll); mapped directly.
-    ///   3. Heuristic     - optional fallback: build DynamicBones from detected sway chains for
+    ///   2. VRMSpringBone:  already live in VNyan (it ships VRM.dll); mapped directly.
+    ///   3. Heuristic:      optional fallback that builds DynamicBones from detected sway chains for
     ///                      models that shipped neither (e.g. MagicaCloth-only rigs).
     ///
     /// Everything is reflection-only: DynamicBone lives in Assembly-CSharp with obfuscated enum
@@ -70,7 +70,7 @@ namespace WarudoImporter
             for (int i = 0; i < names.Length; i++)
             {
                 try { Assembly.Load(names[i]); }
-                catch { /* not shipped by this host - nothing to revive */ }
+                catch { /* not shipped by this host, nothing to revive */ }
             }
         }
 
@@ -140,7 +140,7 @@ namespace WarudoImporter
             if (root == null) { r.notes.Add("No avatar to convert."); return r; }
             if (tDB == null)
             {
-                r.notes.Add("This VNyan build has no DynamicBone type - cannot convert. Use the " +
+                r.notes.Add("This VNyan build has no DynamicBone type, so nothing can be converted. Use the " +
                             "physbones.json path instead.");
                 return r;
             }
@@ -178,7 +178,7 @@ namespace WarudoImporter
             Type tPBBase = FindType("VRC.Dynamics.VRCPhysBoneBase");
             if (tPB == null || tPBBase == null)
             {
-                r.notes.Add("VRCPhysBone types not loaded (VRC stub assemblies missing) - skipped.");
+                r.notes.Add("VRCPhysBone types not loaded (VRC stub assemblies missing), skipped.");
                 return;
             }
 
@@ -269,7 +269,7 @@ namespace WarudoImporter
         static void ConvertSpringBones(GameObject root, Result r, HashSet<Transform> claimed)
         {
             Type tSB = FindType("VRM.VRMSpringBone");
-            if (tSB == null) { return; } // no VRM in this host - fine
+            if (tSB == null) { return; } // no VRM in this host, which is fine
 
             Component[] comps = root.GetComponentsInChildren(tSB, true);
             for (int i = 0; i < comps.Length; i++)
@@ -322,8 +322,8 @@ namespace WarudoImporter
         /// what DynamicBone also does. MeshCloth simulates mesh vertices directly and has no
         /// DynamicBone equivalent, so it is reported and skipped rather than approximated badly.
         ///
-        /// Requires the MagicaClothV2 assembly to have been loaded before the avatar bundle -
-        /// see PreloadPhysicsAssemblies. Without it these components are dead scripts and their
+        /// Requires the MagicaClothV2 assembly to have been loaded before the avatar bundle
+        /// (see PreloadPhysicsAssemblies). Without it these components are dead scripts and their
         /// authored values cannot be read at all.
         /// </summary>
         static void ConvertMagicaCloth(GameObject root, Result r, HashSet<Transform> claimed)
@@ -424,7 +424,7 @@ namespace WarudoImporter
             if (r.fromMagicaCloth > 0)
                 r.notes.Add("Converted " + r.fromMagicaCloth + " Magica Cloth chain(s) to DynamicBone.");
             if (meshCloth > 0)
-                r.notes.Add(meshCloth + " Magica MeshCloth setup(s) skipped - those simulate mesh " +
+                r.notes.Add(meshCloth + " Magica MeshCloth setup(s) skipped: those simulate mesh " +
                             "vertices, which DynamicBone cannot represent.");
         }
 

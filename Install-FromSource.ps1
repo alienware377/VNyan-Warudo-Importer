@@ -25,7 +25,7 @@
 #  dead "missing script" placeholders. These two stub assemblies re-declare
 #  those classes with the exact assembly names, version (1.0.0.0) and serialized
 #  fields, so VNyan's plugin loader picks them up at startup and the bundle's
-#  PhysBone data deserializes - which is what lets the importer turn the
+#  PhysBone data deserializes, which is what lets the importer turn the
 #  creator's real physics tuning into DynamicBone. Without them, VRChat-authored
 #  models fall back to generic auto-detected physics.
 #
@@ -33,14 +33,14 @@
 #
 #    * Elevation and cloud drives. Writing into Program Files needs
 #      Administrator, and an elevated session does NOT see mapped / virtual
-#      cloud drives - an elevated copy taken straight from such a drive fails
+#      cloud drives: an elevated copy taken straight from such a drive fails
 #      silently because the source path does not exist over there. So the build
 #      output is staged into C:\VNyanInstallTemp first and the elevated step
 #      copies from that real local path.
 #
 #    * VNyan locks the DLL. A loaded plugin assembly cannot be overwritten, so
 #      this script refuses to run while VNyan is open rather than leaving a
-#      half-updated plugin behind. It never starts VNyan.exe itself - launching
+#      half-updated plugin behind. It never starts VNyan.exe itself, because launching
 #      it again would create a second instance and the OSC / VMC ports would
 #      collide.
 # =============================================================================
@@ -167,7 +167,7 @@ foreach ($s in $sources) {
 
 # VNyan holds a lock on a loaded plugin DLL; refuse rather than half-install.
 if (Get-Process -Name 'VNyan' -ErrorAction SilentlyContinue) {
-    Fail "VNyan is running. Close it completely (check the system tray) and run this again - the plugin DLL is locked while VNyan has it loaded."
+    Fail "VNyan is running. Close it completely (check the system tray) and run this again. The plugin DLL is locked while VNyan has it loaded."
 }
 
 # ----- 1) choose VNyan folder ------------------------------------------------
@@ -267,7 +267,7 @@ if ($unityVer -notlike '2022.3.*') {
 
 # ----- 3) find a Roslyn C# compiler ------------------------------------------
 # The sources use C# 6 syntax, so the in-box .NET Framework csc.exe
-# (Microsoft.NET\Framework64\v4.0.30319) will NOT do - it only speaks C# 5.
+# (Microsoft.NET\Framework64\v4.0.30319) will not do: it only speaks C# 5.
 # Every Unity install ships Roslyn under Editor\Data\Tools\Roslyn\csc.exe, so
 # look there first, then fall back to a Visual Studio / MSBuild copy.
 
@@ -292,7 +292,7 @@ foreach ($p in $cscCandidates) {
 }
 
 if (-not $csc) {
-    Fail "Could not find a Roslyn csc.exe. Any Unity install has one at Editor\Data\Tools\Roslyn\csc.exe - install Unity 2022.3.x via Unity Hub, or install the Visual Studio Build Tools."
+    Fail "Could not find a Roslyn csc.exe. Any Unity install has one at Editor\Data\Tools\Roslyn\csc.exe. Install Unity 2022.3.x via Unity Hub, or install the Visual Studio Build Tools."
 }
 Good "  Using $csc"
 
@@ -341,7 +341,7 @@ foreach ($dep in @('VNyanInterface.dll', 'Newtonsoft.Json.dll')) {
 # host that has no VRChat SDK those load as dead "missing script" placeholders.
 # These two stubs re-declare those classes with the exact assembly names,
 # version (1.0.0.0) and serialized fields, so VNyan's plugin loader picks them up
-# at startup and the bundle's PhysBone data deserializes - which is what lets the
+# at startup and the bundle's PhysBone data deserializes, which is what lets the
 # importer turn the creator's real physics tuning into DynamicBone. Without them,
 # VRChat-authored models fall back to generic auto-detected physics.
 #
@@ -361,7 +361,7 @@ try {
         $leaf = Split-Path -Leaf $sb.Out
         foreach ($src in $sb.Sources) {
             if (-not (Test-Path -LiteralPath (Join-Path $Root $src))) {
-                Fail "Missing $src - keep the whole repo together."
+                Fail "Missing $src. Keep the whole repo together."
             }
         }
 
@@ -444,7 +444,7 @@ foreach ($i in $install) {
 
 $dest = Join-Path $vnyan $DestRel
 
-# A tiny .cmd is what gets elevated, and it reads only from C:\VNyanInstallTemp -
+# A tiny .cmd is what gets elevated, and it reads only from C:\VNyanInstallTemp,
 # a path the elevated session is guaranteed to see.
 $copyCmd = Join-Path $Stage '_copy.cmd'
 $copyLines = @(
@@ -478,7 +478,7 @@ $allOk = $true
 foreach ($p in $install) {
     $d = Join-Path $dest $p.Name
     if (-not (Test-Path -LiteralPath $d)) {
-        Err "  FAIL  $($p.Name) - not installed"
+        Err "  FAIL  $($p.Name): not installed"
         $allOk = $false
         continue
     }
@@ -486,7 +486,7 @@ foreach ($p in $install) {
     $b = (Get-FileHash -LiteralPath $d).Hash
     if ($a -eq $b) { Good "  PASS  $($p.Name)" }
     else {
-        Err "  FAIL  $($p.Name) - installed copy does not match what was just built"
+        Err "  FAIL  $($p.Name): installed copy does not match what was just built"
         $allOk = $false
     }
 }

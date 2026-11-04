@@ -65,7 +65,7 @@ namespace WarudoImporter
         public bool isBinary;
 
         /// <summary>
-        /// Set for clips that are NOT one of the VRM presets - Perfect Sync / ARKit shapes get a
+        /// Set for clips that are not one of the VRM presets. Perfect Sync / ARKit shapes get a
         /// clip named after the shape itself, with preset Unknown. Null for preset clips.
         /// </summary>
         public string customName;
@@ -292,7 +292,7 @@ namespace WarudoImporter
         ///
         /// This is what makes Perfect Sync work, and it is NOT optional: the host applies
         /// tracking through VRMBlendShapeProxy.AccumulateValue with a key built by
-        /// BlendShapeKey.CreateUnknown(name), which resolves a CLIP by name - it never looks at
+        /// BlendShapeKey.CreateUnknown(name), which resolves a clip by name and never looks at
         /// mesh blendshapes. A model can carry all 52 ARKit shapes on its mesh and still be
         /// completely unreadable to the host until each one also exists as a clip.
         ///
@@ -378,8 +378,8 @@ namespace WarudoImporter
         /// <summary>
         /// Plans a clip for EVERY mesh blendshape that no other clip already exposes.
         ///
-        /// Without this, a shape the model author added - a custom expression, a toggle, a
-        /// prop-hiding shape - is invisible to the host even though it is right there on the
+        /// Without this, a shape the model author added (a custom expression, a toggle, a
+        /// prop-hiding shape) is invisible to the host even though it is right there on the
         /// mesh, because the host reaches blendshapes through named clips. Anything already
         /// covered by a preset or ARKit clip is skipped, so this only fills the gaps.
         ///
@@ -455,7 +455,7 @@ namespace WarudoImporter
 
                 for (int n = 0; n < names.Count; n++)
                 {
-                    // A name already taken by a preset/ARKit clip must not be redefined -
+                    // A name already taken by a preset/ARKit clip must not be redefined:
                     // that would silently steal an expression the host relies on.
                     if (!usedNames.Add(names[n])) continue;
 
@@ -542,7 +542,7 @@ namespace WarudoImporter
 
         /// <summary>
         /// Returns the UniVRM preset name for a raw blendshape name, or null when the
-        /// shape does not correspond to any VRM preset (which is fine - VNyan can still
+        /// shape does not correspond to any VRM preset (which is fine: VNyan can still
         /// drive it as a raw mesh blendshape).
         /// </summary>
         public static string Classify(string blendShapeName)

@@ -524,7 +524,7 @@ namespace WarudoImporter
         /// <summary>
         /// Choose (upper, lower, distal) for one limb as a unit rather than one bone at a time.
         /// Independent per-bone matching loses on rigs where an auxiliary bone outscores the real
-        /// one - VRChat's "Thigh_L" jiggle root beats "Left Leg" on the name "thigh" alone, and the
+        /// one: VRChat's "Thigh_L" jiggle root beats "Left Leg" on the name "thigh" alone, and the
         /// rest of the chain is then unreachable from it. Here every combination of the top name
         /// matches is tested against the structural invariant (lower strictly under upper, distal
         /// strictly under lower) and the most complete valid chain wins, ties broken by name score.
@@ -653,7 +653,7 @@ namespace WarudoImporter
 
         /// <summary>
         /// VRChat/Blender legacy rigs number the thumb 0/1/2 while VRM and Mixamo use 1/2/3, so a
-        /// plain "Thumb1" is genuinely ambiguous. If a *Thumb0 exists on a side, re-seat that
+        /// plain "Thumb1" is ambiguous. If a *Thumb0 exists on a side, re-seat that
         /// side's whole thumb chain onto 0/1/2.
         /// </summary>
         private static void FixThumbNumbering(Transform[] all, string[] norms, int[] sides, MapResult m, HashSet<Transform> used)
@@ -733,7 +733,7 @@ namespace WarudoImporter
                 Transform pt = NearestMappedParent(bone, m);
                 if (pt == null || IsAncestorOf(pt, t)) continue;
 
-                m.notes.Add("Hierarchy check: '" + t.name + "' is not under '" + pt.name + "' - rejected as " + bone + ".");
+                m.notes.Add("Hierarchy check: '" + t.name + "' is not under '" + pt.name + "', rejected as " + bone + ".");
                 m.map.Remove(bone);
                 used.Remove(t);
                 Transform guess = LongestChild(pt, used);
@@ -910,13 +910,13 @@ namespace WarudoImporter
                 else if (ax > ab) { ab = ax; wideB = c; xb = sx; }
             }
             if (wideA == null || wideB == null) return;
-            if (xa * xb >= 0f) return; // both subtrees reach the same side - not a left/right pair
+            if (xa * xb >= 0f) return; // both subtrees reach the same side, not a left/right pair
 
             Transform left = xa > 0f ? wideA : wideB;
             Transform right = xa > 0f ? wideB : wideA;
             SeatArmChain(left, SIDE_LEFT, m, used);
             SeatArmChain(right, SIDE_RIGHT, m, used);
-            m.notes.Add("Structural fallback: arms from '" + chest.name + "' by widest subtree - left '" + left.name + "', right '" + right.name + "'.");
+            m.notes.Add("Structural fallback: arms from '" + chest.name + "' by widest subtree (left '" + left.name + "', right '" + right.name + "').");
         }
 
         private static void SeatArmChain(Transform start, int side, MapResult m, HashSet<Transform> used)
@@ -979,7 +979,7 @@ namespace WarudoImporter
             if (m == null || m.map.Count == 0) { error = "Build failed: no bone mapping supplied."; return null; }
             if (!m.CanBuild)
             {
-                error = "Build failed: required bones are unmapped - " + Join(m.missingRequired, m.missingRequired.Count);
+                error = "Build failed. Required bones are unmapped: " + Join(m.missingRequired, m.missingRequired.Count);
                 return null;
             }
 
@@ -999,7 +999,7 @@ namespace WarudoImporter
             if (dupes.Count > 0)
             {
                 error = "Build failed: duplicate transform names under '" + root.name +
-                    "' - Unity requires unique skeleton bone names. Rename these first: " + Join(dupes, 12) +
+                    "'. Unity requires unique skeleton bone names. Rename these first: " + Join(dupes, 12) +
                     (dupes.Count > 12 ? " (+" + (dupes.Count - 12) + " more)" : "");
                 return null;
             }

@@ -16,7 +16,7 @@ REM  VRCPhysBone components, and in a host that has no VRChat SDK those load as
 REM  dead "missing script" placeholders. These two stub assemblies re-declare
 REM  those classes with the exact assembly names, version (1.0.0.0) and
 REM  serialized fields, so VNyan's plugin loader picks them up at startup and the
-REM  bundle's PhysBone data deserializes - which is what lets the importer turn
+REM  bundle's PhysBone data deserializes, which is what lets the importer turn
 REM  the creator's real physics tuning into DynamicBone. Without them,
 REM  VRChat-authored models fall back to generic auto-detected physics.
 REM
@@ -58,8 +58,8 @@ if not exist "%VNYAN%\VNyan_Data\Managed\VNyanInterface.dll" goto :novnyan
 REM --- 3) VNyan must be closed ---------------------------------------------
 REM  Windows holds a lock on a loaded plugin assembly, so copying over a DLL
 REM  while VNyan is running leaves you with a half-installed plugin (new
-REM  .vnobj, old .dll). Refuse instead. Do NOT start VNyan.exe to bring it to
-REM  the front - that launches a SECOND instance and the OSC / VMC ports end
+REM  .vnobj, old .dll). Refuse instead. Do not start VNyan.exe to bring it to
+REM  the front: that launches a second instance and the OSC / VMC ports end
 REM  up in use.
 tasklist /FI "IMAGENAME eq VNyan.exe" /NH 2>nul | find /I "VNyan.exe" >nul
 if not errorlevel 1 goto :running
@@ -140,7 +140,7 @@ exit /b 1
 
 :verifyfail
 echo.
-echo *** Verification FAILED - the files in VNyan do not match dist\. ***
+echo *** Verification FAILED: the files in VNyan do not match dist\. ***
 echo     The most likely causes are: you declined the Administrator prompt,
 echo     or VNyan was reopened partway through. Close VNyan and try again.
 pause

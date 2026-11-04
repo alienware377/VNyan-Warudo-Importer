@@ -1,7 +1,7 @@
 @echo off
 setlocal enableextensions
 REM ===========================================================================
-REM  Warudo Importer - portable installer.
+REM  Warudo Importer: portable installer.
 REM  NO Unity, NO compiler, NO build required.
 REM
 REM  The files in dist\ are ALREADY built. The .vnobj was produced with Unity
@@ -18,12 +18,12 @@ REM  VRCPhysBone components, and in a host that has no VRChat SDK those load as
 REM  dead "missing script" placeholders. These two stub assemblies re-declare
 REM  those classes with the exact assembly names, version (1.0.0.0) and
 REM  serialized fields, so VNyan's plugin loader picks them up at startup and the
-REM  bundle's PhysBone data deserializes - which is what lets the importer turn
+REM  bundle's PhysBone data deserializes, which is what lets the importer turn
 REM  the creator's real physics tuning into DynamicBone. Without them,
 REM  VRChat-authored models fall back to generic auto-detected physics.
 REM
-REM  (The Unity Editor itself can't be bundled - it's several gigabytes and its
-REM   license forbids redistribution - but it isn't needed here: the build
+REM  (The Unity Editor itself can't be bundled, since it's several gigabytes and its
+REM   license forbids redistribution, but it isn't needed here: the build
 REM   output it would produce is already in dist\. Only use INSTALL_BUILD.bat if
 REM   the prebuilt bundle ever refuses to load.)
 REM ===========================================================================
@@ -49,7 +49,7 @@ for %%F in (%FILES%) do if not exist "%SRC%\%%F" goto :nodist
 REM --- VNyan must be closed -------------------------------------------------
 REM  A loaded plugin assembly is locked by Windows; copying over it while VNyan
 REM  runs leaves a half-installed plugin. Refuse rather than half-install.
-REM  Never launch VNyan.exe to "focus" it - that starts a second instance and
+REM  Never launch VNyan.exe to "focus" it: that starts a second instance and
 REM  the OSC / VMC ports collide.
 tasklist /FI "IMAGENAME eq VNyan.exe" /NH 2>nul | find /I "VNyan.exe" >nul
 if not errorlevel 1 goto :running
@@ -133,7 +133,7 @@ echo Now start VNyan, open the Plugins window and click "Warudo Importer".
 echo.
 echo If the Plugins panel is still empty after restarting:
 echo   1. VNyan ^> Settings ^> Misc ^> "Allow Third Party Plugins" must be ON.
-echo      VNyan logs nothing when this is off - the panel is silently empty.
+echo      VNyan logs nothing when this is off, so the panel is just empty.
 echo      Check this first.
 echo   2. Make sure you picked the folder that actually contains VNyan.exe.
 echo      If you have several VNyan installs, launch the same one you installed
@@ -180,7 +180,7 @@ exit /b 1
 
 :verifyfail
 echo.
-echo *** Verification FAILED - the files in VNyan do not match dist\. ***
+echo *** Verification FAILED: the files in VNyan do not match dist\. ***
 echo     Most likely you declined the Administrator prompt, or VNyan was
 echo     reopened partway through. Close VNyan and run this again.
 pause

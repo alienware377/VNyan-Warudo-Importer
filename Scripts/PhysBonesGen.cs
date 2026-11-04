@@ -7,7 +7,7 @@
 // skeleton itself and emit a physbones.json config for the user's existing
 // VNyanPhysBones plugin.
 //
-// The emitted JSON schema is fixed and case sensitive - it is deserialized by
+// The emitted JSON schema is fixed and case sensitive: it is deserialized by
 // Newtonsoft on the plugin side. Do not rename fields.
 //
 // Hard constraints (do not break):
@@ -63,7 +63,7 @@ namespace WarudoImporter
         public const string CatBreast = "breast";
         public const string CatMisc = "misc";
 
-        // Tokens are matched against *name parts*, never as raw substrings - see
+        // Tokens are matched against *name parts*, never as raw substrings. See
         // SplitNameParts / PartMatchesToken. A token of fewer than
         // TokenPrefixMinLength characters must equal a whole part, which is what keeps
         // "fin" out of "IndexFinger1_L" and "ass" out of "Glass"/"Tassel"/"Compass".
@@ -107,7 +107,7 @@ namespace WarudoImporter
         {
             "wing", "wings", "jiggle", "belly", "ass", "booty", "thigh_jiggle",
             "floppy", "chain", "tassel", "bell", "bells", "feather", "fluff",
-            // Exact parts only - "fin" as a prefix swallows every finger bone.
+            // Exact parts only: "fin" as a prefix swallows every finger bone.
             "fin", "fins"
         };
 
@@ -210,9 +210,9 @@ namespace WarudoImporter
             }
             else if (category == CatBreast)
             {
-                // Measured against the actual solver: pull+stiffness apply per SUBSTEP (2x per
-                // frame), so the old .35/.55/.40 removed ~43% of any deflection per frame - a
-                // millimetre tremor decaying in ~100 ms that reads as completely dead on camera.
+                // In this solver pull+stiffness apply per substep (2x per
+                // frame), so values like .35/.55/.40 remove ~43% of any deflection per frame,
+                // leaving a tremor that dies out in ~100 ms and looks rigid on camera.
                 // Soft pull + low stiffness + high spring (spring lowers damping) is what
                 // actually reads as jiggle in this solver.
                 p.pull = 0.08f; p.spring = 0.80f; p.stiffness = 0.05f;
@@ -1261,7 +1261,7 @@ namespace WarudoImporter
 
         /// <summary>
         /// Tiny StringBuilder based JSON writer. Floats are always formatted with
-        /// InvariantCulture - on a machine with a comma decimal separator the config
+        /// InvariantCulture: on a machine with a comma decimal separator the config
         /// would otherwise be silently corrupt.
         /// </summary>
         private class JsonWriter

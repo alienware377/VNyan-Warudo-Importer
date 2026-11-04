@@ -11,12 +11,12 @@ namespace WarudoImporter
     /// Writes a real .vsfavatar file from a .warudo mod.
     ///
     /// A .vsfavatar is a Unity AssetBundle, and AssetBundles can only be *built* by the Unity
-    /// editor - a running player has no equivalent API. So instead of pretending, this drives a
+    /// editor. A running player has no equivalent API, so this drives a
     /// Unity editor in batch mode: it drops the offline converter into a Unity project, runs it
     /// headlessly, and hands back the finished file. The result is an ordinary .vsfavatar that
     /// VNyan (or VSeeFace) loads with its normal Load Avatar button, no plugin involved.
     ///
-    /// The project has to be one that already has UniVRM and the shaders the mod uses - the
+    /// The project has to be one that already has UniVRM and the shaders the mod uses. The
     /// Warudo SDK project is the obvious choice, since it has both by definition.
     /// </summary>
     public static class VsfAvatarExport

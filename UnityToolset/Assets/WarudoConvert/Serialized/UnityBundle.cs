@@ -12,7 +12,7 @@ namespace WarudoImporter.Serialized
     /// rather than expanding the whole archive into memory.
     ///
     /// That only helps LZ4 bundles, which are chunked. An LZMA bundle is a SINGLE block, so
-    /// touching it at all materialises the whole archive - VRChat avatars are built this way.
+    /// touching it at all materialises the whole archive. VRChat avatars are built this way.
     /// Note also that a bundle's block-info header can be LZ4 while its data is LZMA, so the
     /// header flags do not tell you which decompressor the payload needs.
     /// </summary>

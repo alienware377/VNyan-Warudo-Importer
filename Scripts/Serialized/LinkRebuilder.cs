@@ -11,7 +11,7 @@ namespace WarudoImporter.Serialized
     /// read back by <see cref="LinkPayload"/>.
     ///
     /// Members are restored generically by reflection rather than by a hand-written field
-    /// map, so whatever the author actually set is what the avatar gets back - including
+    /// map, so whatever the author actually set is what the avatar gets back, including
     /// settings this importer has never heard of.
     /// </summary>
     internal sealed class LinkRebuilder
@@ -105,7 +105,7 @@ namespace WarudoImporter.Serialized
             }
 
             foreach (var kv in missingTypes)
-                Note("skipped " + kv.Value + "x " + kv.Key + " - no runtime for it here");
+                Note("skipped " + kv.Value + "x " + kv.Key + " (no runtime for it here)");
 
             // Pass two fills in the data.
             foreach (var kv in created)
@@ -390,7 +390,7 @@ namespace WarudoImporter.Serialized
                 return false;
             }
 
-            // Some other component - find it through the GameObject that carries it.
+            // Some other component: find it through the GameObject that carries it.
             long ownerGo;
             if (payload.ComponentToGameObject.TryGetValue(v.ObjectPathId, out ownerGo))
             {

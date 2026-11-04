@@ -73,7 +73,7 @@ namespace WarudoImporter
 
             if (payload.Components.Count == 0)
             {
-                r.notes.Add("This mod has no stripped components - nothing to restore.");
+                r.notes.Add("This mod has no stripped components to restore.");
                 return r;
             }
             r.notes.Add("Mod component data: " + payload.Summarize());
