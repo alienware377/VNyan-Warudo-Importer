@@ -15,7 +15,7 @@ namespace WarudoImporter.EditorTools
     /// loads it through its normal Load Avatar button with no plugin involved at all.
     ///
     /// Drop the WarudoConvert folder into a Unity project that already has UniVRM and the shaders
-    /// the mod uses - the Warudo SDK project is the ideal host, since it has both. Menu:
+    /// the mod uses. The Warudo SDK project is the ideal host, since it has both. Menu:
     /// Warudo > Convert .warudo to .vsfavatar.
     ///
     /// Why two steps rather than one button: assets that come out of an AssetBundle live only in
@@ -151,7 +151,7 @@ namespace WarudoImporter.EditorTools
                 AssetDatabase.Refresh();
                 L(prep.Ok
                     ? "Staged. Check the avatar in the scene, then Build .vsfavatar."
-                    : "Staged WITH ERRORS - fix them on the scene object before exporting.");
+                    : "Staged with errors. Fix them on the scene object before exporting.");
             }
             catch (Exception e) { L("EXCEPTION: " + e); }
         }
@@ -191,7 +191,7 @@ namespace WarudoImporter.EditorTools
             if (shaderMisses > 0)
                 L("WARNING: " + shaderMisses + " material(s) use a shader that is not installed in this project. " +
                   "Install the same shader (e.g. Poiyomi) and re-stage, or those materials will render pink. " +
-                  "Do NOT substitute MToon - it cannot reproduce Poiyomi's features.");
+                  "Do not substitute MToon: it cannot reproduce Poiyomi's features.");
         }
 
         Mesh CopyMesh(Mesh src, string dir, Dictionary<Mesh, Mesh> map)
@@ -388,7 +388,7 @@ namespace WarudoImporter.EditorTools
                     BuildAssetBundleOptions.ChunkBasedCompression, BuildTarget.StandaloneWindows64);
 
                 string src = Path.Combine(tmp, "vsfavatar");
-                if (!File.Exists(src)) { L("Bundle build produced nothing - check the console."); return; }
+                if (!File.Exists(src)) { L("Bundle build produced nothing. Check the console."); return; }
 
                 Directory.CreateDirectory(outputDir);
                 string dst = Path.Combine(outputDir, Sanitize(staged.name) + ".vsfavatar");

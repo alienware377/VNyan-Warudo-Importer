@@ -117,7 +117,7 @@ powershell -NoProfile -Command "foreach($f in '%FILES%'.Split(' ')){ Unblock-Fil
 REM --- verify by comparing hashes ------------------------------------------
 echo.
 echo Verifying installed files against dist\ ...
-powershell -NoProfile -Command "$ok=$true; foreach($f in '%FILES%'.Split(' ')){ $s=Join-Path '%SRC%' $f; $d=Join-Path '%DST%' $f; if(-not (Test-Path -LiteralPath $d)){ Write-Host ('  FAIL  ' + $f + ' - not installed'); $ok=$false; continue }; $a=(Get-FileHash -LiteralPath $s).Hash; $b=(Get-FileHash -LiteralPath $d).Hash; if($a -eq $b){ Write-Host ('  PASS  ' + $f) } else { Write-Host ('  FAIL  ' + $f + ' - installed copy does not match dist\'); $ok=$false } }; if($ok){ exit 0 } else { exit 1 }"
+powershell -NoProfile -Command "$ok=$true; foreach($f in '%FILES%'.Split(' ')){ $s=Join-Path '%SRC%' $f; $d=Join-Path '%DST%' $f; if(-not (Test-Path -LiteralPath $d)){ Write-Host ('  FAIL  ' + $f + ': not installed'); $ok=$false; continue }; $a=(Get-FileHash -LiteralPath $s).Hash; $b=(Get-FileHash -LiteralPath $d).Hash; if($a -eq $b){ Write-Host ('  PASS  ' + $f) } else { Write-Host ('  FAIL  ' + $f + ': installed copy does not match dist\'); $ok=$false } }; if($ok){ exit 0 } else { exit 1 }"
 set "VERIFY=%ERRORLEVEL%"
 
 rd /S /Q "%STAGE%" >nul 2>&1

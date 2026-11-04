@@ -9,7 +9,7 @@ namespace WarudoImporter.EditorTools
     /// Headless entry point for the .warudo -> .vsfavatar converter, so the VNyan plugin can
     /// drive a real AssetBundle build without anyone opening Unity by hand.
     ///
-    /// AssetBundles can only be built by the editor - there is no runtime equivalent - so the
+    /// AssetBundles can only be built by the editor (there is no runtime equivalent), so the
     /// plugin shells out to:
     ///
     ///   Unity.exe -batchmode -quit -projectPath &lt;project&gt;
@@ -49,7 +49,7 @@ namespace WarudoImporter.EditorTools
                 w.Stage();
                 if (w.staged == null)
                 {
-                    Debug.LogError("[WarudoConvert] Staging failed - see the log above.");
+                    Debug.LogError("[WarudoConvert] Staging failed, see the log above.");
                     Finish(3);
                     return;
                 }

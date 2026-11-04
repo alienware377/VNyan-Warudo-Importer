@@ -416,7 +416,7 @@ namespace WarudoImporter
 
             if (!VsfAvatarExport.ToolsetAvailable)
             {
-                Log("The offline converter sources are not installed next to the plugin. Point me at " +
+                Log("The offline converter sources are not installed next to the plugin. Select " +
                     "the repo's UnityToolset\\Assets\\WarudoConvert folder.");
                 Flush();
                 string tp = NativeFileDialog.PickFolder("Locate UnityToolset\\Assets\\WarudoConvert",
