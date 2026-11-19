@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Reflection;
 using System.IO;
 using System.Text;
 using UnityEngine;
@@ -27,6 +28,9 @@ namespace WarudoImporter
         const string BUTTON_NAME = "Warudo Importer";
         const string SETTINGS_ID = "WarudoImporter";
         const string LOG = "[WarudoImporter] ";
+        // Released version of this build and the GitHub repo the update check reads.
+        const string VERSION = "v1.3.0";
+        const string REPO = "alienware377/VNyan-Warudo-Importer";
 
         // Assigned by the AssetBundle build (WarudoImporterBuild.cs).
         public GameObject windowPrefab;
@@ -62,6 +66,7 @@ namespace WarudoImporter
         readonly Dictionary<string, Slider> sliders = new Dictionary<string, Slider>();
         readonly Dictionary<string, InputField> valueFields = new Dictionary<string, InputField>();
         GameObject tipBubble;
+        RectTransform tipBubbleRt;   // cached so the hover check does not GetComponent per frame
         string tipOwner;
         float tipLeaveAt = -1f;
 
@@ -97,6 +102,10 @@ namespace WarudoImporter
 
             LoadSettings();
             SetupWindow();
+            // "Update vX" button left of the X when GitHub has a newer release. Nothing else sits
+            // on the right of the header (the title is left-aligned), so no extra inset is needed.
+            if (window != null)
+                PluginChrome.CheckForUpdate(this, window.GetComponent<RectTransform>(), REPO, VERSION, LOG, uiFont, 0f);
             Log("Ready. VNyan loader hook: " + (VNyanBridge.Available ? "available" : "NOT AVAILABLE"));
             Log("Physics assemblies present: " + DynamicBoneConvert.DescribePhysicsAssemblies());
             Log("uMod relink: " + (UModRelink.Available
@@ -122,7 +131,9 @@ namespace WarudoImporter
             // Tooltip bubbles stay while hovered and close 5s after the cursor leaves.
             if (tipBubble != null && tipBubble.activeSelf)
             {
-                RectTransform rt = tipBubble.GetComponent<RectTransform>();
+                if (tipBubbleRt == null || tipBubbleRt.gameObject != tipBubble)
+                    tipBubbleRt = tipBubble.GetComponent<RectTransform>();
+                RectTransform rt = tipBubbleRt;
                 bool over = rt != null && RectTransformUtility.RectangleContainsScreenPoint(rt, Input.mousePosition, null);
                 if (over) tipLeaveAt = -1f;
                 else if (tipLeaveAt < 0f) tipLeaveAt = Time.unscaledTime + 5f;
@@ -452,6 +463,7 @@ namespace WarudoImporter
             opt.stripAnimators = prepOptions.stripNestedAnimators;
             opt.disableConstraints = prepOptions.disableConstraints;
             opt.writePhysBonesJson = !convertDynBone;
+            opt.materialRecipe = MaterialStudioRecipe(VNyanBridge.CacheKeyFor(selectedPath));
 
             var notes = new List<string>();
             exportJob = VsfAvatarExport.Start(opt, notes);
@@ -459,6 +471,28 @@ namespace WarudoImporter
             Flush();
 
             if (exportJob != null) StartCoroutine(WatchExport(exportJob));
+        }
+
+        /// <summary>
+        /// Saved material edits for this model from Material Studio, when that separate plugin is
+        /// installed (found by name, never referenced). "" or null when there are none.
+        /// </summary>
+        string MaterialStudioRecipe(string cacheKey)
+        {
+            try
+            {
+                foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    Type t = asm.GetType("MaterialStudio.MaterialStudioPlugin", false);
+                    if (t == null) continue;
+                    MethodInfo mi = t.GetMethod("RecipePathFor", BindingFlags.Public | BindingFlags.Static);
+                    string p = mi != null ? mi.Invoke(null, new object[] { cacheKey }) as string : null;
+                    if (!string.IsNullOrEmpty(p)) Log("Material Studio edits for this model: " + Path.GetFileName(p));
+                    return p;
+                }
+            }
+            catch (Exception e) { Log("Material Studio lookup failed: " + e.Message); }
+            return null;
         }
 
         System.Collections.IEnumerator WatchExport(VsfAvatarExport.Job job)
@@ -566,6 +600,7 @@ namespace WarudoImporter
             WireButton("Button_ChainsAll", delegate { SetAllChains(true); });
             WireButton("Button_ChainsNone", delegate { SetAllChains(false); });
             AddVsfAvatarButton();
+            AddCloseButtons();
 
             BindToggle("Toggle_StripAnimators", prepOptions.stripNestedAnimators,
                        delegate (bool v) { prepOptions.stripNestedAnimators = v; SaveSettings(); });
@@ -594,6 +629,25 @@ namespace WarudoImporter
         void OnClose()
         {
             if (window != null) window.SetActive(false);
+        }
+
+        /// <summary>
+        /// The shared top-right X (PluginChrome) on the main window and on the bone picker, in
+        /// place of the prefab's own X and the picker's "Close" (those are hidden, still wired).
+        /// Both X spots were free apart from the buttons they replace, so nothing else moves.
+        /// </summary>
+        void AddCloseButtons()
+        {
+            RectTransform wrt = window.GetComponent<RectTransform>();
+            PluginChrome.EnsureCloseX(wrt, OnClose, uiFont);
+            PluginChrome.HideOtherClose(wrt, "Button_Close");
+
+            RectTransform prt = pickerWindow != null ? pickerWindow.GetComponent<RectTransform>() : null;
+            if (prt != null)
+            {
+                PluginChrome.EnsureCloseX(prt, ClosePicker, uiFont);
+                PluginChrome.HideOtherClose(prt, "Button_PickerClose");
+            }
         }
 
         // ----- bone mapping list -----

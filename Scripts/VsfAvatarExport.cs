@@ -32,6 +32,8 @@ namespace WarudoImporter
             public bool reencodeTextures = true;
             public bool stripAnimators = true;
             public bool disableConstraints = true;
+            /// <summary>Material Studio's saved material edits for this model, or null (optional plugin).</summary>
+            public string materialRecipe;
         }
 
         public class Job
@@ -251,6 +253,26 @@ namespace WarudoImporter
             }
         }
 
+        /// <summary>
+        /// Material Studio (a separate, optional plugin) ships editor scripts that apply its saved
+        /// material edits. Copy them into the project so the converter can call them by name.
+        /// </summary>
+        static bool InstallMaterialStudioTools(string projectPath, List<string> notes)
+        {
+            try
+            {
+                string assemblies = Path.GetDirectoryName(PluginDir);
+                string found = null;
+                foreach (string d in Directory.GetDirectories(assemblies, "MaterialStudioTools", SearchOption.AllDirectories))
+                    if (File.Exists(Path.Combine(d, Path.Combine("Editor", "RecipeApplier.cs")))) { found = d; break; }
+                if (found == null) { notes.Add("Material Studio edits found, but its editor scripts are missing; exporting without them."); return false; }
+                CopyTree(found, Path.Combine(projectPath, Path.Combine("Assets", "MaterialStudioTools")));
+                notes.Add("Material Studio edits will be applied to the export.");
+                return true;
+            }
+            catch (Exception e) { notes.Add("Could not add Material Studio's scripts: " + e.Message); return false; }
+        }
+
         static void CopyTree(string from, string to)
         {
             Directory.CreateDirectory(to);
@@ -293,6 +315,8 @@ namespace WarudoImporter
             { notes.Add("No Unity editor found under the Unity Hub folder."); return null; }
 
             if (!InstallToolset(o.projectPath, notes)) return null;
+            if (!string.IsNullOrEmpty(o.materialRecipe) && !InstallMaterialStudioTools(o.projectPath, notes))
+                o.materialRecipe = null;
 
             Directory.CreateDirectory(o.outputDir);
             string log = Path.Combine(Path.GetTempPath(), "WarudoConvertBatch.log");
@@ -309,6 +333,7 @@ namespace WarudoImporter
             if (!o.reencodeTextures) sb.Append(" -noreencode");
             if (!o.stripAnimators) sb.Append(" -keepanimators");
             if (!o.disableConstraints) sb.Append(" -keepconstraints");
+            if (!string.IsNullOrEmpty(o.materialRecipe)) sb.Append(" -matrecipe \"").Append(o.materialRecipe).Append('"');
 
             var psi = new ProcessStartInfo(unity, sb.ToString());
             psi.UseShellExecute = false;

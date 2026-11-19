@@ -133,6 +133,7 @@ $managedRefs = @(
     'UnityEngine.UI.dll',
     'UnityEngine.UIModule.dll',
     'UnityEngine.TextRenderingModule.dll',
+    'UnityEngine.UnityWebRequestModule.dll',
     'VNyanInterface.dll',
     'Newtonsoft.Json.dll'
 )
@@ -149,6 +150,7 @@ $sources = @(
     'Scripts\AvatarPrep.cs',
     'Scripts\VNyanBridge.cs',
     'Scripts\WindowDrag.cs',
+    'Scripts\PluginChrome.cs',
     'Scripts\NativeFileDialog.cs',
     'Scripts\WarudoImporterPlugin.cs'
 )

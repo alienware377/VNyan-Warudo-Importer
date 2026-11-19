@@ -232,14 +232,20 @@ namespace WarudoImporter
             catch { return false; }
         }
 
+        static float nextCacheHold;
+
         /// <summary>
         /// VNyan re-reads its app settings on save, which resets the flag to the stored value.
-        /// Call this every frame once an avatar has been handed over, otherwise the next avatar
-        /// reload looks for a file that does not exist. Cheap: one field read.
+        /// Call this once an avatar has been handed over, otherwise the next avatar reload
+        /// looks for a file that does not exist. The flag only flips when VNyan saves its
+        /// settings, so checking twice a second is plenty and keeps the reflection calls
+        /// (and the boxed bool they allocate) off the per-frame path.
         /// </summary>
         public static void HoldCacheOpen()
         {
             if (!NeedsCacheHeldOpen || fInUse == null || mGetInstance == null) return;
+            if (Time.unscaledTime < nextCacheHold) return;
+            nextCacheHold = Time.unscaledTime + 0.5f;
             try
             {
                 object cache = mGetInstance.Invoke(null, null);

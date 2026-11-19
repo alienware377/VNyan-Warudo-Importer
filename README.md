@@ -62,6 +62,9 @@ avoids that.
    automatically. Click **Pick** on that row and choose the right transform from the model.
 5. **Import into VNyan**: the model loads as your avatar.
 
+When a newer release is out, an **Update** button appears in the window's title bar next to
+the close button. It opens the release page; nothing is downloaded on its own.
+
 The **Sway chains** section (Hair / Skirt / Tail / Ears / Breast / Misc) controls which bone
 chains get detected for the physics export described below.
 
@@ -272,6 +275,10 @@ Two things the project must satisfy:
   launching Unity and tells you rather than letting it fail ten minutes in.
 
 The first run in a project imports the whole thing and can take several minutes.
+
+**Material Studio edits come along.** If the separate Material Studio plugin is installed and
+you saved material edits for this model there, the export applies them too, so the
+`.vsfavatar` looks the way you tuned it in VNyan. Without Material Studio nothing changes.
 
 ### By hand, in the editor
 

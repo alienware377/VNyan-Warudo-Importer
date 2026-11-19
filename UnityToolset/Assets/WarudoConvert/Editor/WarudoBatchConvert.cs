@@ -54,6 +54,8 @@ namespace WarudoImporter.EditorTools
                     return;
                 }
 
+                ApplyMaterialStudio(w.staged, Arg("-matrecipe"));
+
                 w.Export();
 
                 string expected = Path.Combine(outDir, Sanitize(w.staged.name) + ".vsfavatar");
@@ -74,6 +76,31 @@ namespace WarudoImporter.EditorTools
                 exit = 5;
             }
             Finish(exit);
+        }
+
+        /// <summary>
+        /// Material Studio's saved material edits (optional separate plugin): its editor scripts
+        /// are copied into the project by the plugin and called by name here.
+        /// </summary>
+        static void ApplyMaterialStudio(GameObject staged, string recipe)
+        {
+            if (staged == null || string.IsNullOrEmpty(recipe)) return;
+            try
+            {
+                Type applier = null;
+                foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    applier = asm.GetType("MaterialStudio.EditorTools.RecipeApplier", false);
+                    if (applier != null) break;
+                }
+                if (applier == null) { Debug.LogWarning("[WarudoConvert] Material Studio scripts not compiled in; edits skipped."); return; }
+                var notes = new System.Collections.Generic.List<string>();
+                var mi = applier.GetMethod("ApplyRecipeFile");
+                object n = mi.Invoke(null, new object[] { staged, recipe, "Assets/WarudoImported/" + Sanitize(staged.name) + "/MaterialStudio", true, notes });
+                foreach (string s in notes) Debug.Log("[WarudoConvert] Material Studio: " + s);
+                Debug.Log("[WarudoConvert] Material Studio edits applied to " + n + " material(s).");
+            }
+            catch (Exception e) { Debug.LogWarning("[WarudoConvert] Material Studio edits failed: " + e); }
         }
 
         static void Finish(int code)
